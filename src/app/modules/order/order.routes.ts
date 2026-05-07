@@ -44,4 +44,18 @@ router.patch(
     OrderController.updateOrderStatus
 );
 
+// Customer cancels their own order
+router.patch(
+    '/:id/cancel',
+    auth(UserRole.CUSTOMER),
+    OrderController.cancelOrder
+);
+
+// Seller views their orders
+router.get(
+    '/seller-orders',
+    auth(UserRole.SELLER),
+    OrderController.getSellerOrders
+);
+
 export const orderRoutes = router;

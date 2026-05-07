@@ -73,10 +73,24 @@ const updateOrderStatus = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
+const cancelOrder = catchAsync(async (req: Request, res: Response) => {
+    const result = await OrderService.cancelOrder(req.user!, req.params.id);
+    sendResponse(res, { statusCode: httpStatus.OK, success: true, message: 'Order cancelled', data: result });
+});
+
+const getSellerOrders = catchAsync(async (req: Request, res: Response) => {
+    const options = pick(req.query, ['page', 'limit', 'sortBy', 'sortOrder']);
+    const result = await OrderService.getSellerOrders(req.user!, options);
+    sendResponse(res, { statusCode: httpStatus.OK, success: true, message: 'Seller orders fetched', meta: result.meta, data: result.data });
+});
+
 export const OrderController = {
     createOrder,
     getMyOrders,
     getOrderById,
     getAllOrders,
-    updateOrderStatus
+    updateOrderStatus,
+    cancelOrder,
+    getSellerOrders,
 }
+

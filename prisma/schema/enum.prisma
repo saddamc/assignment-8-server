@@ -23,3 +23,69 @@ enum PaymentStatus {
     FAILED
     REFUNDED
 }
+
+enum AdminRole {
+    SUPER_ADMIN
+    FINANCE
+    MODERATOR
+    SUPPORT
+}
+
+enum PayoutStatus {
+    PENDING
+    PROCESSING
+    COMPLETED
+    FAILED
+}
+
+enum WithdrawalStatus {
+    PENDING
+    APPROVED
+    REJECTED
+    PROCESSED
+}
+
+enum DiscountType {
+    PERCENTAGE
+    FIXED
+}
+
+enum BannerPosition {
+    HERO
+    SIDEBAR
+    POPUP
+    FOOTER
+}
+
+enum DisputeStatus {
+    OPEN
+    UNDER_REVIEW
+    RESOLVED
+    CLOSED
+}
+
+enum FraudSeverity {
+    LOW
+    MEDIUM
+    HIGH
+    CRITICAL
+}
+
+enum ProductApprovalStatus {
+    PENDING
+    APPROVED
+    REJECTED
+}
+
+enum NotificationType {
+    ORDER_PLACED
+    ORDER_SHIPPED
+    ORDER_DELIVERED
+    ORDER_CANCELLED
+    PAYMENT_RECEIVED
+    REVIEW_POSTED
+    SELLER_APPROVED
+    SELLER_REJECTED
+    SYSTEM
+}
+

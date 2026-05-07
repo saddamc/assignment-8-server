@@ -26,18 +26,27 @@ model CartItem {
 }
 
 model Order {
-    id            String        @id @default(uuid())
-    customerEmail String
-    totalAmount   Float
-    status        OrderStatus   @default(PENDING)
-    paymentStatus PaymentStatus @default(UNPAID)
-    transactionId String?
+    id              String        @id @default(uuid())
+    customerEmail   String
+    totalAmount     Float
+    discountAmount  Float         @default(0)
+    shippingAmount  Float         @default(0)
+    taxAmount       Float         @default(0)
+    couponCode      String?
+    status          OrderStatus   @default(PENDING)
+    paymentStatus   PaymentStatus @default(UNPAID)
+    transactionId   String?
     shippingAddress String?
-    createdAt     DateTime      @default(now())
-    updatedAt     DateTime      @updatedAt
+    addressId       String?
+    notes           String?
+    createdAt       DateTime      @default(now())
+    updatedAt       DateTime      @updatedAt
 
-    customer Customer    @relation(fields: [customerEmail], references: [email])
-    items    OrderItem[]
+    customer     Customer      @relation(fields: [customerEmail], references: [email])
+    address      Address?      @relation(fields: [addressId], references: [id])
+    items        OrderItem[]
+    sellerReview SellerReview?
+    disputes     Dispute[]
 
     @@index([customerEmail])
     @@index([status])
@@ -57,3 +66,45 @@ model OrderItem {
 
     @@map("order_items")
 }
+
+model Coupon {
+    id             String       @id @default(uuid())
+    code           String       @unique
+    sellerEmail    String?
+    discountType   DiscountType
+    discountValue  Float
+    minOrderAmount Float        @default(0)
+    maxUses        Int?
+    usedCount      Int          @default(0)
+    isActive       Boolean      @default(true)
+    expiresAt      DateTime?
+    createdAt      DateTime     @default(now())
+    updatedAt      DateTime     @updatedAt
+
+    seller Seller? @relation(fields: [sellerEmail], references: [email])
+
+    @@index([code])
+    @@map("coupons")
+}
+
+model Dispute {
+    id          String        @id @default(uuid())
+    orderId     String
+    raisedBy    String
+    sellerEmail String
+    reason      String
+    description String
+    status      DisputeStatus @default(OPEN)
+    resolution  String?
+    resolvedBy  String?
+    resolvedAt  DateTime?
+    createdAt   DateTime      @default(now())
+    updatedAt   DateTime      @updatedAt
+
+    order Order @relation(fields: [orderId], references: [id])
+
+    @@index([orderId])
+    @@index([status])
+    @@map("disputes")
+}
+

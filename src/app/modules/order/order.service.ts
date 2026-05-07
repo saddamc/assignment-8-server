@@ -260,10 +260,49 @@ const updateOrderStatus = async (id: string, payload: { status: OrderStatus }) =
     return updatedOrder;
 };
 
+const cancelOrder = async (user: IJWTPayload, id: string) => {
+    const order = await prisma.order.findFirst({ where: { id, customerEmail: user.email } });
+    if (!order) throw new ApiError(httpStatus.NOT_FOUND, 'Order not found');
+    if (order.status !== OrderStatus.PENDING) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Only PENDING orders can be cancelled');
+    }
+
+    const orderItems = await prisma.orderItem.findMany({ where: { orderId: id } });
+
+    await prisma.$transaction(async (tnx) => {
+        for (const item of orderItems) {
+            await tnx.product.update({ where: { id: item.productId }, data: { stock: { increment: item.quantity } } });
+        }
+        await tnx.order.update({ where: { id }, data: { status: OrderStatus.CANCELLED } });
+    });
+
+    return prisma.order.findUnique({ where: { id }, include: { items: { include: { product: { select: { name: true } } } } } });
+};
+
+const getSellerOrders = async (user: IJWTPayload, options: IOptions) => {
+    const { page, limit, skip, sortBy, sortOrder } = paginationHelper.calculatePagination(options);
+    const [data, total] = await prisma.$transaction([
+        prisma.order.findMany({
+            where: { items: { some: { product: { sellerEmail: user.email } } } },
+            include: {
+                items: { where: { product: { sellerEmail: user.email } }, include: { product: { select: { name: true, images: true, sellerEmail: true } } } },
+                customer: { select: { name: true, email: true } },
+                address: true,
+            },
+            skip, take: limit, orderBy: { [sortBy]: sortOrder }
+        }),
+        prisma.order.count({ where: { items: { some: { product: { sellerEmail: user.email } } } } })
+    ]);
+    return { meta: { page, limit, total }, data };
+};
+
 export const OrderService = {
     createOrder,
     getMyOrders,
     getOrderById,
     getAllOrders,
-    updateOrderStatus
+    updateOrderStatus,
+    cancelOrder,
+    getSellerOrders,
 }
+
