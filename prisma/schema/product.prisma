@@ -1,180 +1,210 @@
 model Category {
-    id          String    @id @default(uuid())
-    name        String    @unique
-    slug        String    @unique
-    image       String?
-    description String?
-    createdAt   DateTime  @default(now())
-    updatedAt   DateTime  @updatedAt
-    products    Product[]
+  id            String     @id @default(uuid())
+  name          String     @unique
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  description   String?
+  image         String?
+  slug          String     @unique
+  parentId      String?
+  parent        Category?  @relation("CategoryChildren", fields: [parentId], references: [id])
+  children      Category[] @relation("CategoryChildren")
+  products      Product[]  @relation("ProductMainCategory")
+  childProducts Product[]  @relation("ProductChildCategory")
+  subProducts   Product[]  @relation("ProductSubCategory")
 
-    @@index([slug])
-    @@map("categories")
+  @@index([slug])
+  @@index([parentId])
+  @@map("categories")
 }
 
 model Brand {
-    id          String    @id @default(uuid())
-    name        String    @unique
-    slug        String    @unique
-    logo        String?
-    description String?
-    createdAt   DateTime  @default(now())
-    updatedAt   DateTime  @updatedAt
-    products    Product[]
+  id          String    @id @default(uuid())
+  name        String    @unique
+  slug        String    @unique
+  logo        String?
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  products    Product[]
 
-    @@index([slug])
-    @@map("brands")
+  @@index([slug])
+  @@map("brands")
 }
 
 model Product {
-    id          String   @id @default(uuid())
-    name        String
-    description String
-    price       Float
-    discount    Float    @default(0)
-    stock       Int      @default(0)
-    images      String[]
-    categoryId  String
-    brandId     String?
-    sellerEmail String
-    isPublished Boolean  @default(false)
-    isDeleted   Boolean  @default(false)
-    createdAt   DateTime @default(now())
-    updatedAt   DateTime @updatedAt
+  id               String           @id @default(uuid())
+  name             String
+  description      String
+  price            Float
+  discount         Float            @default(0)
+  stock            Int              @default(0)
+  images           String[]
+  categoryId       String?
+  sellerEmail      String
+  isDeleted        Boolean          @default(false)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  brandId          String?
+  isPublished      Boolean          @default(false)
+  childCategoryId  String?
+  discountPrice    Float?
+  seoDescription   String?
+  seoKeywords      String[]
+  seoTitle         String?
+  shortDescription String?
+  sku              String?          @unique
+  slug             String?          @unique
+  status           ProductStatus    @default(DRAFT)
+  subCategoryId    String?
+  cartItems        CartItem[]
+  flashSales       FlashSale[]
+  orderItems       OrderItem[]
+  approval         ProductApproval?
+  approvalHistory  ProductApprovalHistory[]
+  variants         ProductVariant[]
+  brand            Brand?           @relation(fields: [brandId], references: [id])
+  category         Category?        @relation("ProductMainCategory", fields: [categoryId], references: [id])
+  childCategory    Category?        @relation("ProductChildCategory", fields: [childCategoryId], references: [id])
+  seller           Seller           @relation(fields: [sellerEmail], references: [email])
+  subCategory      Category?        @relation("ProductSubCategory", fields: [subCategoryId], references: [id])
+  recentlyViewed   RecentlyViewed[]
+  reviews          Review[]
+  wishlistItems    WishlistItem[]
 
-    category       Category         @relation(fields: [categoryId], references: [id])
-    brand          Brand?           @relation(fields: [brandId], references: [id])
-    seller         Seller           @relation(fields: [sellerEmail], references: [email])
-    reviews        Review[]
-    cartItems      CartItem[]
-    orderItems     OrderItem[]
-    wishlistItems  WishlistItem[]
-    variants       ProductVariant[]
-    flashSales     FlashSale[]
-    approval       ProductApproval?
-    recentlyViewed RecentlyViewed[]
-
-    @@index([categoryId])
-    @@index([brandId])
-    @@index([sellerEmail])
-    @@index([price])
-    @@map("products")
+  @@index([categoryId])
+  @@index([subCategoryId])
+  @@index([childCategoryId])
+  @@index([brandId])
+  @@index([sellerEmail])
+  @@index([price])
+  @@index([status])
+  @@map("products")
 }
 
 model Review {
-    id                String   @id @default(uuid())
-    rating            Int
-    comment           String?
-    images            String[]
-    helpfulCount      Int      @default(0)
-    isVerifiedPurchase Boolean @default(false)
-    productId         String
-    customerEmail     String
-    createdAt         DateTime @default(now())
-    updatedAt         DateTime @updatedAt
+  id                 String   @id @default(uuid())
+  rating             Int
+  comment            String?
+  productId          String
+  customerEmail      String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  helpfulCount       Int      @default(0)
+  images             String[]
+  isVerifiedPurchase Boolean  @default(false)
+  customer           Customer @relation(fields: [customerEmail], references: [email])
+  product            Product  @relation(fields: [productId], references: [id])
 
-    product  Product  @relation(fields: [productId], references: [id])
-    customer Customer @relation(fields: [customerEmail], references: [email])
-
-    @@unique([productId, customerEmail])
-    @@map("reviews")
+  @@unique([productId, customerEmail])
+  @@map("reviews")
 }
 
 model ProductVariant {
-    id        String   @id @default(uuid())
-    productId String
-    sku       String   @unique
-    size      String?
-    color     String?
-    stock     Int      @default(0)
-    price     Float?
-    images    String[]
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  id        String   @id @default(uuid())
+  productId String
+  sku       String   @unique
+  size      String?
+  color     String?
+  stock     Int      @default(0)
+  price     Float?
+  images    String[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
 
-    product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-
-    @@index([productId])
-    @@map("product_variants")
+  @@index([productId])
+  @@map("product_variants")
 }
 
 model FlashSale {
-    id          String   @id @default(uuid())
-    sellerEmail String
-    productId   String
-    salePrice   Float
-    quantity    Int
-    soldCount   Int      @default(0)
-    startTime   DateTime
-    endTime     DateTime
-    isActive    Boolean  @default(true)
-    createdAt   DateTime @default(now())
+  id          String   @id @default(uuid())
+  sellerEmail String
+  productId   String
+  salePrice   Float
+  quantity    Int
+  soldCount   Int      @default(0)
+  startTime   DateTime
+  endTime     DateTime
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  product     Product  @relation(fields: [productId], references: [id])
+  seller      Seller   @relation(fields: [sellerEmail], references: [email])
 
-    seller  Seller  @relation(fields: [sellerEmail], references: [email])
-    product Product @relation(fields: [productId], references: [id])
-
-    @@index([productId])
-    @@map("flash_sales")
+  @@index([productId])
+  @@map("flash_sales")
 }
 
 model ProductApproval {
-    id         String                @id @default(uuid())
-    productId  String                @unique
-    status     ProductApprovalStatus @default(PENDING)
-    reviewedBy String?
-    reviewNote String?
-    reviewedAt DateTime?
-    createdAt  DateTime              @default(now())
+  id         String                @id @default(uuid())
+  productId  String                @unique
+  status     ProductApprovalStatus @default(PENDING)
+  reviewedBy String?
+  reviewNote String?
+  reviewedAt DateTime?
+  createdAt  DateTime              @default(now())
+  submittedAt DateTime?             @default(now())
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
 
-    product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  @@map("product_approvals")
+}
 
-    @@map("product_approvals")
+model ProductApprovalHistory {
+  id         String                @id @default(uuid())
+  productId  String
+  status     ProductApprovalStatus
+  reviewedBy String?
+  reviewNote String?
+  createdAt  DateTime              @default(now())
+  product    Product               @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@map("product_approval_histories")
 }
 
 model Banner {
-    id        String         @id @default(uuid())
-    title     String
-    subtitle  String?
-    imageUrl  String
-    linkUrl   String?
-    position  BannerPosition
-    isActive  Boolean        @default(true)
-    sortOrder Int            @default(0)
-    startDate DateTime?
-    endDate   DateTime?
-    createdBy String
-    createdAt DateTime       @default(now())
-    updatedAt DateTime       @updatedAt
+  id        String         @id @default(uuid())
+  title     String
+  subtitle  String?
+  imageUrl  String
+  linkUrl   String?
+  position  BannerPosition
+  isActive  Boolean        @default(true)
+  sortOrder Int            @default(0)
+  startDate DateTime?
+  endDate   DateTime?
+  createdBy String
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
 
-    @@map("banners")
+  @@map("banners")
 }
 
 model SiteConfig {
-    id        String   @id @default(uuid())
-    key       String   @unique
-    value     String
-    type      String   @default("string")
-    updatedBy String
-    updatedAt DateTime @updatedAt
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  type      String   @default("string")
+  updatedBy String
+  updatedAt DateTime @updatedAt
 
-    @@map("site_configs")
+  @@map("site_configs")
 }
 
 model FraudFlag {
-    id         String        @id @default(uuid())
-    targetType String
-    targetId   String
-    reason     String
-    severity   FraudSeverity
-    flaggedBy  String
-    isResolved Boolean       @default(false)
-    resolvedBy String?
-    resolvedAt DateTime?
-    notes      String?
-    createdAt  DateTime      @default(now())
+  id         String        @id @default(uuid())
+  targetType String
+  targetId   String
+  reason     String
+  severity   FraudSeverity
+  flaggedBy  String
+  isResolved Boolean       @default(false)
+  resolvedBy String?
+  resolvedAt DateTime?
+  notes      String?
+  createdAt  DateTime      @default(now())
 
-    @@index([targetType, targetId])
-    @@index([isResolved])
-    @@map("fraud_flags")
+  @@index([targetType, targetId])
+  @@index([isResolved])
+  @@map("fraud_flags")
 }
-

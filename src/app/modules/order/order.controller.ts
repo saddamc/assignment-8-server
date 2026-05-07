@@ -74,7 +74,7 @@ const updateOrderStatus = catchAsync(async (req: Request, res: Response) => {
 });
 
 const cancelOrder = catchAsync(async (req: Request, res: Response) => {
-    const result = await OrderService.cancelOrder(req.user!, req.params.id);
+    const result = await OrderService.cancelOrder(req.user!, req.params.id as string);
     sendResponse(res, { statusCode: httpStatus.OK, success: true, message: 'Order cancelled', data: result });
 });
 

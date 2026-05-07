@@ -13,9 +13,7 @@ const createProductValidationSchema = z.object({
         }).positive("Price must be positive"),
         discount: z.number().min(0).max(100).optional(),
         stock: z.number().int().min(0).optional(),
-        categoryId: z.string({
-            error: "Category ID is required"
-        }),
+        categoryId: z.string().optional(),
         brandId: z.string().optional(),
     })
 });

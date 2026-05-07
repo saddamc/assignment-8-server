@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { NextFunction, Request, Response } from "express"
 import httpStatus from "http-status"
+import { JsonWebTokenError, TokenExpiredError, NotBeforeError } from "jsonwebtoken"
 
 const globalErrorHandler = (err: any, req: Request, res: Response, next: NextFunction) => {
     console.log(err)
@@ -9,7 +10,22 @@ const globalErrorHandler = (err: any, req: Request, res: Response, next: NextFun
     let message = err.message || "Something went wrong!";
     let error = err;
 
-    if (err instanceof Prisma.PrismaClientKnownRequestError) {
+    if (err instanceof TokenExpiredError) {
+        message = "Your session has expired. Please log in again.";
+        statusCode = httpStatus.UNAUTHORIZED;
+        error = { name: err.name, expiredAt: err.expiredAt };
+    }
+    else if (err instanceof NotBeforeError) {
+        message = "Token not yet valid.";
+        statusCode = httpStatus.UNAUTHORIZED;
+        error = { name: err.name };
+    }
+    else if (err instanceof JsonWebTokenError) {
+        message = "Invalid token. Please log in again.";
+        statusCode = httpStatus.UNAUTHORIZED;
+        error = { name: err.name };
+    }
+    else if (err instanceof Prisma.PrismaClientKnownRequestError) {
         if (err.code === "P2002") {
             message = "Duplicate key error",
                 error = err.meta,

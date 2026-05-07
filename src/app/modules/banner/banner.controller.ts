@@ -23,12 +23,12 @@ const getActiveBanners = catchAsync(async (req: Request, res: Response) => {
 });
 
 const updateBanner = catchAsync(async (req: Request, res: Response) => {
-    const result = await BannerService.updateBanner(req.params.id, req.body);
+    const result = await BannerService.updateBanner(req.params.id as string, req.body);
     sendResponse(res, { statusCode: httpStatus.OK, success: true, message: 'Banner updated', data: result });
 });
 
 const deleteBanner = catchAsync(async (req: Request, res: Response) => {
-    await BannerService.deleteBanner(req.params.id);
+    await BannerService.deleteBanner(req.params.id as string);
     sendResponse(res, { statusCode: httpStatus.OK, success: true, message: 'Banner deleted', data: null });
 });
 

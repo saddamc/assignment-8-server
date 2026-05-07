@@ -30,7 +30,7 @@ const getAllWithdrawals = catchAsync(async (req: Request, res: Response) => {
 });
 
 const processWithdrawal = catchAsync(async (req: Request, res: Response) => {
-    const result = await PayoutService.processWithdrawal(req.params.id, req.body);
+    const result = await PayoutService.processWithdrawal(req.params.id as string, req.body);
     sendResponse(res, { statusCode: httpStatus.OK, success: true, message: 'Withdrawal processed', data: result });
 });
 

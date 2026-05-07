@@ -4,12 +4,12 @@ import { IOptions, paginationHelper } from '../../helper/paginationHelper';
 import { NotificationType } from '@prisma/client';
 
 const getMyNotifications = async (user: IJWTPayload, options: IOptions) => {
-    const { skip, take, page, limit } = paginationHelper.calculatePagination(options);
+    const { skip, page, limit } = paginationHelper.calculatePagination(options);
     const [data, total] = await prisma.$transaction([
         prisma.notification.findMany({
             where: { customerEmail: user.email },
             orderBy: { createdAt: 'desc' },
-            skip, take
+            skip, take: limit
         }),
         prisma.notification.count({ where: { customerEmail: user.email } })
     ]);

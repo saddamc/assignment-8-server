@@ -39,20 +39,20 @@ const requestWithdrawal = async (user: IJWTPayload, payload: { amount: number; b
 };
 
 const getWithdrawals = async (user: IJWTPayload, options: IOptions) => {
-    const { skip, take, page, limit } = paginationHelper.calculatePagination(options);
+    const { skip, page, limit } = paginationHelper.calculatePagination(options);
     const [data, total] = await prisma.$transaction([
-        prisma.withdrawalRequest.findMany({ where: { sellerEmail: user.email }, orderBy: { createdAt: 'desc' }, skip, take }),
+        prisma.withdrawalRequest.findMany({ where: { sellerEmail: user.email }, orderBy: { createdAt: 'desc' }, skip, take: limit }),
         prisma.withdrawalRequest.count({ where: { sellerEmail: user.email } })
     ]);
     return { meta: { page, limit, total }, data };
 };
 
 const getAllWithdrawals = async (options: IOptions, filters?: { status?: string }) => {
-    const { skip, take, page, limit } = paginationHelper.calculatePagination(options);
+    const { skip, page, limit } = paginationHelper.calculatePagination(options);
     const where: any = {};
     if (filters?.status) where.status = filters.status;
     const [data, total] = await prisma.$transaction([
-        prisma.withdrawalRequest.findMany({ where, include: { seller: { select: { name: true, storeName: true } } }, orderBy: { createdAt: 'desc' }, skip, take }),
+        prisma.withdrawalRequest.findMany({ where, include: { seller: { select: { name: true, storeName: true } } }, orderBy: { createdAt: 'desc' }, skip, take: limit }),
         prisma.withdrawalRequest.count({ where })
     ]);
     return { meta: { page, limit, total }, data };

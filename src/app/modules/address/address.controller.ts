@@ -16,17 +16,17 @@ const createAddress = catchAsync(async (req: Request, res: Response) => {
 });
 
 const updateAddress = catchAsync(async (req: Request, res: Response) => {
-    const result = await AddressService.updateAddress(req.user as IJWTPayload, req.params.id, req.body);
+    const result = await AddressService.updateAddress(req.user as IJWTPayload, req.params.id as string, req.body);
     sendResponse(res, { statusCode: httpStatus.OK, success: true, message: 'Address updated', data: result });
 });
 
 const deleteAddress = catchAsync(async (req: Request, res: Response) => {
-    await AddressService.deleteAddress(req.user as IJWTPayload, req.params.id);
+    await AddressService.deleteAddress(req.user as IJWTPayload, req.params.id as string);
     sendResponse(res, { statusCode: httpStatus.OK, success: true, message: 'Address deleted', data: null });
 });
 
 const setDefaultAddress = catchAsync(async (req: Request, res: Response) => {
-    const result = await AddressService.setDefaultAddress(req.user as IJWTPayload, req.params.id);
+    const result = await AddressService.setDefaultAddress(req.user as IJWTPayload, req.params.id as string);
     sendResponse(res, { statusCode: httpStatus.OK, success: true, message: 'Default address updated', data: result });
 });
 

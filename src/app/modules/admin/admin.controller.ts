@@ -15,17 +15,17 @@ const getAllUsers = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getUserById = catchAsync(async (req: Request, res: Response) => {
-    const result = await AdminService.getUserById(req.params.id);
+    const result = await AdminService.getUserById(req.params.id as string);
     sendResponse(res, { statusCode: httpStatus.OK, success: true, message: 'User fetched', data: result });
 });
 
 const blockUser = catchAsync(async (req: Request, res: Response) => {
-    const result = await AdminService.blockUser(req.params.id);
+    const result = await AdminService.blockUser(req.params.id as string);
     sendResponse(res, { statusCode: httpStatus.OK, success: true, message: 'User blocked', data: result });
 });
 
 const unblockUser = catchAsync(async (req: Request, res: Response) => {
-    const result = await AdminService.unblockUser(req.params.id);
+    const result = await AdminService.unblockUser(req.params.id as string);
     sendResponse(res, { statusCode: httpStatus.OK, success: true, message: 'User unblocked', data: result });
 });
 
@@ -38,22 +38,22 @@ const getAllSellers = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getSellerById = catchAsync(async (req: Request, res: Response) => {
-    const result = await AdminService.getSellerById(req.params.id);
+    const result = await AdminService.getSellerById(req.params.id as string);
     sendResponse(res, { statusCode: httpStatus.OK, success: true, message: 'Seller fetched', data: result });
 });
 
 const approveSeller = catchAsync(async (req: Request, res: Response) => {
-    const result = await AdminService.approveSeller((req.user as IJWTPayload).email, req.params.id);
+    const result = await AdminService.approveSeller((req.user as IJWTPayload).email, req.params.id as string);
     sendResponse(res, { statusCode: httpStatus.OK, success: true, message: 'Seller approved', data: result });
 });
 
 const rejectSeller = catchAsync(async (req: Request, res: Response) => {
-    const result = await AdminService.rejectSeller((req.user as IJWTPayload).email, req.params.id, req.body.reason);
+    const result = await AdminService.rejectSeller((req.user as IJWTPayload).email, req.params.id as string, req.body.reason);
     sendResponse(res, { statusCode: httpStatus.OK, success: true, message: 'Seller rejected', data: result });
 });
 
 const updateCommission = catchAsync(async (req: Request, res: Response) => {
-    const result = await AdminService.updateCommission(req.params.id, req.body.commissionRate);
+    const result = await AdminService.updateCommission(req.params.id as string, req.body.commissionRate);
     sendResponse(res, { statusCode: httpStatus.OK, success: true, message: 'Commission updated', data: result });
 });
 
@@ -66,17 +66,17 @@ const getAllDisputes = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getDisputeById = catchAsync(async (req: Request, res: Response) => {
-    const result = await AdminService.getDisputeById(req.params.id);
+    const result = await AdminService.getDisputeById(req.params.id as string);
     sendResponse(res, { statusCode: httpStatus.OK, success: true, message: 'Dispute fetched', data: result });
 });
 
 const resolveDispute = catchAsync(async (req: Request, res: Response) => {
-    const result = await AdminService.resolveDispute((req.user as IJWTPayload).email, req.params.id, req.body);
+    const result = await AdminService.resolveDispute((req.user as IJWTPayload).email, req.params.id as string, req.body);
     sendResponse(res, { statusCode: httpStatus.OK, success: true, message: 'Dispute resolved', data: result });
 });
 
 const createDispute = catchAsync(async (req: Request, res: Response) => {
-    const result = await AdminService.createDispute(req.user as IJWTPayload, req.params.orderId, req.body);
+    const result = await AdminService.createDispute(req.user as IJWTPayload, req.params.orderId as string, req.body);
     sendResponse(res, { statusCode: httpStatus.CREATED, success: true, message: 'Dispute created', data: result });
 });
 
@@ -88,7 +88,7 @@ const getFraudFlags = catchAsync(async (req: Request, res: Response) => {
 });
 
 const resolveFraudFlag = catchAsync(async (req: Request, res: Response) => {
-    const result = await AdminService.resolveFraudFlag(req.params.id, (req.user as IJWTPayload).email, req.body.notes);
+    const result = await AdminService.resolveFraudFlag(req.params.id as string, (req.user as IJWTPayload).email, req.body.notes);
     sendResponse(res, { statusCode: httpStatus.OK, success: true, message: 'Flag resolved', data: result });
 });
 

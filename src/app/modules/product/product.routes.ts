@@ -10,6 +10,9 @@ const router = express.Router();
 
 // ===================== CATEGORY ROUTES =====================
 
+router.get('/categories/tree', ProductController.getCategoryTree);
+router.get('/categories/:parentId/subcategories', ProductController.getSubcategories);
+
 router.post(
     '/categories',
     auth(UserRole.ADMIN),
@@ -52,35 +55,36 @@ router.delete('/brands/:id', auth(UserRole.ADMIN), ProductController.deleteBrand
 
 // ===================== PRODUCT ROUTES =====================
 
+router.get(
+    '/my-products',
+    auth(UserRole.SELLER, UserRole.ADMIN),
+    ProductController.getSellerProducts
+);
+
 router.post(
     '/',
     auth(UserRole.SELLER, UserRole.ADMIN),
-    fileUploader.upload.array('images', 5),
+    fileUploader.upload.array('images', 10),
     ProductController.createProduct
 );
 
-router.get(
-    '/',
-    ProductController.getAllProducts
-);
-
-router.get(
-    '/:id',
-    ProductController.getProductById
-);
+router.get('/', ProductController.getAllProducts);
+router.get('/:id', ProductController.getProductById);
 
 router.patch(
     '/:id',
     auth(UserRole.SELLER, UserRole.ADMIN),
-    fileUploader.upload.array('images', 5),
+    fileUploader.upload.array('images', 10),
     ProductController.updateProduct
 );
 
-router.delete(
-    '/:id',
-    auth(UserRole.SELLER, UserRole.ADMIN),
-    ProductController.deleteProduct
-);
+router.delete('/:id', auth(UserRole.SELLER, UserRole.ADMIN), ProductController.deleteProduct);
+
+// ===================== VARIANT ROUTES =====================
+
+router.post('/:id/variants', auth(UserRole.SELLER, UserRole.ADMIN), ProductController.createVariant);
+router.patch('/:id/variants/:variantId', auth(UserRole.SELLER, UserRole.ADMIN), ProductController.updateVariant);
+router.delete('/:id/variants/:variantId', auth(UserRole.SELLER, UserRole.ADMIN), ProductController.deleteVariant);
 
 // ===================== REVIEW ROUTES =====================
 
@@ -91,9 +95,6 @@ router.post(
     ProductController.createReview
 );
 
-router.get(
-    '/:productId/reviews',
-    ProductController.getProductReviews
-);
+router.get('/:productId/reviews', ProductController.getProductReviews);
 
 export const productRoutes = router;

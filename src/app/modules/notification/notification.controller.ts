@@ -13,7 +13,7 @@ const getMyNotifications = catchAsync(async (req: Request, res: Response) => {
 });
 
 const markAsRead = catchAsync(async (req: Request, res: Response) => {
-    await NotificationService.markAsRead(req.user as IJWTPayload, req.params.id);
+    await NotificationService.markAsRead(req.user as IJWTPayload, req.params.id as string);
     sendResponse(res, { statusCode: httpStatus.OK, success: true, message: 'Marked as read', data: null });
 });
 
@@ -23,7 +23,7 @@ const markAllAsRead = catchAsync(async (req: Request, res: Response) => {
 });
 
 const deleteNotification = catchAsync(async (req: Request, res: Response) => {
-    await NotificationService.deleteNotification(req.user as IJWTPayload, req.params.id);
+    await NotificationService.deleteNotification(req.user as IJWTPayload, req.params.id as string);
     sendResponse(res, { statusCode: httpStatus.OK, success: true, message: 'Notification deleted', data: null });
 });
 

@@ -8,14 +8,14 @@ import { DisputeStatus } from '@prisma/client';
 // ─── USER MANAGEMENT ──────────────────────────────────────────────────────────
 
 const getAllUsers = async (options: IOptions, filters: any) => {
-    const { skip, take, page, limit } = paginationHelper.calculatePagination(options);
+    const { skip, page, limit } = paginationHelper.calculatePagination(options);
     const where: any = { isDeleted: false };
     if (filters.role) where.role = filters.role;
     if (filters.status) where.status = filters.status;
     if (filters.search) where.OR = [{ name: { contains: filters.search, mode: 'insensitive' } }, { email: { contains: filters.search, mode: 'insensitive' } }];
 
     const [data, total] = await prisma.$transaction([
-        prisma.user.findMany({ where, select: { id: true, name: true, email: true, role: true, status: true, createdAt: true }, skip, take, orderBy: { createdAt: 'desc' } }),
+        prisma.user.findMany({ where, select: { id: true, name: true, email: true, role: true, status: true, createdAt: true }, skip, take: limit, orderBy: { createdAt: 'desc' } }),
         prisma.user.count({ where })
     ]);
     return { meta: { page, limit, total }, data };
@@ -45,18 +45,28 @@ const unblockUser = async (id: string) => {
 // ─── SELLER MANAGEMENT ────────────────────────────────────────────────────────
 
 const getAllSellers = async (options: IOptions, filters: any) => {
-    const { skip, take, page, limit } = paginationHelper.calculatePagination(options);
-    const where: any = { isDeleted: false };
-    if (filters.isApproved !== undefined) where.isApproved = filters.isApproved === 'true';
+    const { skip, page, limit } = paginationHelper.calculatePagination(options);
+    const where: any = { role: 'SELLER', isDeleted: false };
+    if (filters.isApproved !== undefined) where.isApproved = filters.isApproved;
 
     const [data, total] = await prisma.$transaction([
-        prisma.seller.findMany({
+        prisma.user.findMany({
             where,
-            include: { _count: { select: { products: true } } },
-            skip, take, orderBy: { createdAt: 'desc' }
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                role: true,
+                status: true,
+                createdAt: true,
+            },
+            skip,
+            take: limit,
+            orderBy: { createdAt: 'desc' },
         }),
-        prisma.seller.count({ where })
+        prisma.user.count({ where }),
     ]);
+
     return { meta: { page, limit, total }, data };
 };
 
@@ -98,12 +108,12 @@ const updateCommission = async (id: string, commissionRate: number) => {
 // ─── DISPUTES ─────────────────────────────────────────────────────────────────
 
 const getAllDisputes = async (options: IOptions, filters: any) => {
-    const { skip, take, page, limit } = paginationHelper.calculatePagination(options);
+    const { skip, page, limit } = paginationHelper.calculatePagination(options);
     const where: any = {};
     if (filters.status) where.status = filters.status;
 
     const [data, total] = await prisma.$transaction([
-        prisma.dispute.findMany({ where, include: { order: { include: { customer: { select: { name: true } } } } }, skip, take, orderBy: { createdAt: 'desc' } }),
+        prisma.dispute.findMany({ where, include: { order: { include: { customer: { select: { name: true } } } } }, skip, take: limit, orderBy: { createdAt: 'desc' } }),
         prisma.dispute.count({ where })
     ]);
     return { meta: { page, limit, total }, data };
@@ -136,9 +146,9 @@ const createDispute = async (user: IJWTPayload, orderId: string, payload: { reas
 // ─── FRAUD FLAGS ──────────────────────────────────────────────────────────────
 
 const getFraudFlags = async (options: IOptions) => {
-    const { skip, take, page, limit } = paginationHelper.calculatePagination(options);
+    const { skip, page, limit } = paginationHelper.calculatePagination(options);
     const [data, total] = await prisma.$transaction([
-        prisma.fraudFlag.findMany({ where: { isResolved: false }, skip, take, orderBy: { createdAt: 'desc' } }),
+        prisma.fraudFlag.findMany({ where: { isResolved: false }, skip, take: limit, orderBy: { createdAt: 'desc' } }),
         prisma.fraudFlag.count({ where: { isResolved: false } })
     ]);
     return { meta: { page, limit, total }, data };
@@ -151,10 +161,10 @@ const resolveFraudFlag = async (id: string, adminEmail: string, notes?: string) 
 // ─── ACTIVITY LOGS ────────────────────────────────────────────────────────────
 
 const getActivityLogs = async (options: IOptions, adminEmail?: string) => {
-    const { skip, take, page, limit } = paginationHelper.calculatePagination(options);
+    const { skip, page, limit } = paginationHelper.calculatePagination(options);
     const where = adminEmail ? { adminEmail } : {};
     const [data, total] = await prisma.$transaction([
-        prisma.adminActivityLog.findMany({ where, skip, take, orderBy: { createdAt: 'desc' } }),
+        prisma.adminActivityLog.findMany({ where, skip, take: limit, orderBy: { createdAt: 'desc' } }),
         prisma.adminActivityLog.count({ where })
     ]);
     return { meta: { page, limit, total }, data };

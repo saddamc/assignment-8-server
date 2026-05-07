@@ -1,8 +1,10 @@
-export const productSearchableFields = ["name", "description"];
+export const productSearchableFields = ["name", "description", "shortDescription", "sku"];
 
 export const productFilterableFields = [
     "searchTerm",
     "categoryId",
+    "subCategoryId",
+    "childCategoryId",
     "categorySlug",
     "brandId",
     "brandSlug",
@@ -11,7 +13,15 @@ export const productFilterableFields = [
     "maxPrice",
     "minRating",
     "inStock",
+    "status",
 ];
 
-export const categoryFilterableFields = ["searchTerm"];
+export const sellerProductFilterableFields = [
+    "searchTerm",
+    "status",
+    "categoryId",
+    "inStock",
+];
+
+export const categoryFilterableFields = ["searchTerm", "parentId"];
 export const brandFilterableFields = ["searchTerm"];

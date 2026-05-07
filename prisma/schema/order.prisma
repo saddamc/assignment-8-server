@@ -1,110 +1,103 @@
 model Cart {
-    id            String     @id @default(uuid())
-    customerEmail String     @unique
-    createdAt     DateTime   @default(now())
-    updatedAt     DateTime   @updatedAt
+  id            String     @id @default(uuid())
+  customerEmail String     @unique
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  items         CartItem[]
+  customer      Customer   @relation(fields: [customerEmail], references: [email])
 
-    customer Customer   @relation(fields: [customerEmail], references: [email])
-    items    CartItem[]
-
-    @@map("carts")
+  @@map("carts")
 }
 
 model CartItem {
-    id        String   @id @default(uuid())
-    cartId    String
-    productId String
-    quantity  Int
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  id        String   @id @default(uuid())
+  cartId    String
+  productId String
+  quantity  Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  cart      Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id])
 
-    cart    Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
-    product Product @relation(fields: [productId], references: [id])
-
-    @@unique([cartId, productId])
-    @@map("cart_items")
+  @@unique([cartId, productId])
+  @@map("cart_items")
 }
 
 model Order {
-    id              String        @id @default(uuid())
-    customerEmail   String
-    totalAmount     Float
-    discountAmount  Float         @default(0)
-    shippingAmount  Float         @default(0)
-    taxAmount       Float         @default(0)
-    couponCode      String?
-    status          OrderStatus   @default(PENDING)
-    paymentStatus   PaymentStatus @default(UNPAID)
-    transactionId   String?
-    shippingAddress String?
-    addressId       String?
-    notes           String?
-    createdAt       DateTime      @default(now())
-    updatedAt       DateTime      @updatedAt
+  id              String        @id @default(uuid())
+  customerEmail   String
+  totalAmount     Float
+  status          OrderStatus   @default(PENDING)
+  paymentStatus   PaymentStatus @default(UNPAID)
+  transactionId   String?
+  shippingAddress String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  addressId       String?
+  couponCode      String?
+  discountAmount  Float         @default(0)
+  notes           String?
+  shippingAmount  Float         @default(0)
+  taxAmount       Float         @default(0)
+  disputes        Dispute[]
+  items           OrderItem[]
+  address         Address?      @relation(fields: [addressId], references: [id])
+  customer        Customer      @relation(fields: [customerEmail], references: [email])
+  sellerReview    SellerReview?
 
-    customer     Customer      @relation(fields: [customerEmail], references: [email])
-    address      Address?      @relation(fields: [addressId], references: [id])
-    items        OrderItem[]
-    sellerReview SellerReview?
-    disputes     Dispute[]
-
-    @@index([customerEmail])
-    @@index([status])
-    @@map("orders")
+  @@index([customerEmail])
+  @@index([status])
+  @@map("orders")
 }
 
 model OrderItem {
-    id        String   @id @default(uuid())
-    orderId   String
-    productId String
-    quantity  Int
-    price     Float
-    createdAt DateTime @default(now())
+  id        String   @id @default(uuid())
+  orderId   String
+  productId String
+  quantity  Int
+  price     Float
+  createdAt DateTime @default(now())
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id])
 
-    order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-    product Product @relation(fields: [productId], references: [id])
-
-    @@map("order_items")
+  @@map("order_items")
 }
 
 model Coupon {
-    id             String       @id @default(uuid())
-    code           String       @unique
-    sellerEmail    String?
-    discountType   DiscountType
-    discountValue  Float
-    minOrderAmount Float        @default(0)
-    maxUses        Int?
-    usedCount      Int          @default(0)
-    isActive       Boolean      @default(true)
-    expiresAt      DateTime?
-    createdAt      DateTime     @default(now())
-    updatedAt      DateTime     @updatedAt
+  id             String       @id @default(uuid())
+  code           String       @unique
+  sellerEmail    String?
+  discountType   DiscountType
+  discountValue  Float
+  minOrderAmount Float        @default(0)
+  maxUses        Int?
+  usedCount      Int          @default(0)
+  isActive       Boolean      @default(true)
+  expiresAt      DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  seller         Seller?      @relation(fields: [sellerEmail], references: [email])
 
-    seller Seller? @relation(fields: [sellerEmail], references: [email])
-
-    @@index([code])
-    @@map("coupons")
+  @@index([code])
+  @@map("coupons")
 }
 
 model Dispute {
-    id          String        @id @default(uuid())
-    orderId     String
-    raisedBy    String
-    sellerEmail String
-    reason      String
-    description String
-    status      DisputeStatus @default(OPEN)
-    resolution  String?
-    resolvedBy  String?
-    resolvedAt  DateTime?
-    createdAt   DateTime      @default(now())
-    updatedAt   DateTime      @updatedAt
+  id          String        @id @default(uuid())
+  orderId     String
+  raisedBy    String
+  sellerEmail String
+  reason      String
+  description String
+  status      DisputeStatus @default(OPEN)
+  resolution  String?
+  resolvedBy  String?
+  resolvedAt  DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  order       Order         @relation(fields: [orderId], references: [id])
 
-    order Order @relation(fields: [orderId], references: [id])
-
-    @@index([orderId])
-    @@index([status])
-    @@map("disputes")
+  @@index([orderId])
+  @@index([status])
+  @@map("disputes")
 }
-

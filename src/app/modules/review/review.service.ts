@@ -5,13 +5,13 @@ import { IJWTPayload } from '../../types/common';
 import { IOptions, paginationHelper } from '../../helper/paginationHelper';
 
 const getProductReviews = async (productId: string, options: IOptions) => {
-    const { skip, take, page, limit } = paginationHelper.calculatePagination(options);
+    const { skip, page, limit } = paginationHelper.calculatePagination(options);
     const [reviews, total] = await prisma.$transaction([
         prisma.review.findMany({
             where: { productId },
             include: { customer: { select: { name: true, profilePhoto: true } } },
             orderBy: { createdAt: 'desc' },
-            skip, take
+            skip, take: limit
         }),
         prisma.review.count({ where: { productId } })
     ]);
@@ -67,13 +67,13 @@ const deleteReview = async (user: IJWTPayload, id: string) => {
 };
 
 const getMyReviews = async (user: IJWTPayload, options: IOptions) => {
-    const { skip, take, page, limit } = paginationHelper.calculatePagination(options);
+    const { skip, page, limit } = paginationHelper.calculatePagination(options);
     const [reviews, total] = await prisma.$transaction([
         prisma.review.findMany({
             where: { customerEmail: user.email },
             include: { product: { select: { id: true, name: true, images: true } } },
             orderBy: { createdAt: 'desc' },
-            skip, take
+            skip, take: limit
         }),
         prisma.review.count({ where: { customerEmail: user.email } })
     ]);

@@ -11,13 +11,13 @@ const getAllConfig = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getPublicConfig = catchAsync(async (req: Request, res: Response) => {
-    const result = await SiteConfigService.getPublicConfig(req.params.key);
+    const result = await SiteConfigService.getPublicConfig(req.params.key as string);
     sendResponse(res, { statusCode: httpStatus.OK, success: true, message: 'Config fetched', data: result });
 });
 
 const upsertConfig = catchAsync(async (req: Request, res: Response) => {
     const { value, type } = req.body;
-    const result = await SiteConfigService.upsertConfig(req.user as IJWTPayload, req.params.key, value, type);
+    const result = await SiteConfigService.upsertConfig(req.user as IJWTPayload, req.params.key as string, value, type);
     sendResponse(res, { statusCode: httpStatus.OK, success: true, message: 'Config updated', data: result });
 });
 

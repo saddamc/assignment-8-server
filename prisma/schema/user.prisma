@@ -1,228 +1,218 @@
 model User {
-    id                 String     @id @default(uuid())
-    name               String?
-    email              String     @unique
-    password           String
-    role               UserRole   @default(CUSTOMER)
-    profileImage       String?
-    status             UserStatus @default(ACTIVE)
-    needPasswordChange Boolean    @default(false)
-    createdAt          DateTime   @default(now())
-    updatedAt          DateTime   @updatedAt
+  id                  String               @id @default(uuid())
+  email               String               @unique
+  password            String
+  role                UserRole             @default(CUSTOMER)
+  status              UserStatus           @default(ACTIVE)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  name                String?
+  needPasswordChange  Boolean              @default(false)
+  profileImage        String?
+  admin               Admin?
+  customer            Customer?
+  passwordResetTokens PasswordResetToken[]
+  seller              Seller?
 
-    admin               Admin?
-    seller              Seller?
-    customer            Customer?
-    passwordResetTokens PasswordResetToken[]
-
-    @@map("users")
+  @@map("users")
 }
 
 model PasswordResetToken {
-    id        String   @id @default(uuid())
-    userId    String
-    user      User     @relation(fields: [userId], references: [id])
-    token     String   @unique
-    expiresAt DateTime
-    used      Boolean  @default(false)
-    createdAt DateTime @default(now())
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
 
-    @@map("password_reset_tokens")
+  @@map("password_reset_tokens")
 }
 
 model Admin {
-    id            String    @id @default(uuid())
-    name          String
-    email         String    @unique
-    profilePhoto  String?
-    contactNumber String
-    bio           String?
-    adminRole     AdminRole @default(SUPPORT)
-    isDeleted     Boolean   @default(false)
-    createdAt     DateTime  @default(now())
-    updatedAt     DateTime  @updatedAt
+  id            String             @id @default(uuid())
+  name          String
+  email         String             @unique
+  profilePhoto  String?
+  contactNumber String
+  isDeleted     Boolean            @default(false)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  bio           String?
+  adminRole     AdminRole          @default(SUPPORT)
+  activityLogs  AdminActivityLog[]
+  user          User               @relation(fields: [email], references: [email])
 
-    user         User               @relation(fields: [email], references: [email])
-    activityLogs AdminActivityLog[]
-
-    @@map("admins")
+  @@map("admins")
 }
 
 model Seller {
-    id               String  @id @default(uuid())
-    name             String
-    email            String  @unique
-    storeName        String
-    storeDescription String?
-    profilePhoto     String?
-    contactNumber    String
-    address          String?
-    bio              String?
-    isApproved       Boolean @default(false)
-    commissionRate   Float   @default(10)
-    storeRating      Float   @default(0)
-    totalRatings     Int     @default(0)
-    bankDetails      Json?
-    isDeleted        Boolean @default(false)
-    createdAt        DateTime @default(now())
-    updatedAt        DateTime @updatedAt
+  id                 String              @id @default(uuid())
+  name               String
+  email              String              @unique
+  storeName          String
+  storeDescription   String?
+  profilePhoto       String?
+  contactNumber      String
+  address            String?
+  isDeleted          Boolean             @default(false)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  bio                String?
+  bankDetails        Json?
+  commissionRate     Float               @default(10)
+  isApproved         Boolean             @default(false)
+  autoApproveProducts Boolean            @default(false)
+  trustScore         Float               @default(0)
+  storeRating        Float               @default(0)
+  totalRatings       Int                 @default(0)
+  coupons            Coupon[]
+  flashSales         FlashSale[]
+  payouts            Payout[]
+  products           Product[]
+  sellerReviews      SellerReview[]
+  user               User                @relation(fields: [email], references: [email])
+  withdrawalRequests WithdrawalRequest[]
 
-    user               User                @relation(fields: [email], references: [email])
-    products           Product[]
-    sellerReviews      SellerReview[]
-    payouts            Payout[]
-    withdrawalRequests WithdrawalRequest[]
-    coupons            Coupon[]
-    flashSales         FlashSale[]
-
-    @@map("sellers")
+  @@map("sellers")
 }
 
 model Customer {
-    id            String   @id @default(uuid())
-    name          String
-    email         String   @unique
-    profilePhoto  String?
-    contactNumber String?
-    address       String?
-    bio           String?
-    isDeleted     Boolean  @default(false)
-    createdAt     DateTime @default(now())
-    updatedAt     DateTime @updatedAt
+  id             String           @id @default(uuid())
+  name           String
+  email          String           @unique
+  profilePhoto   String?
+  contactNumber  String?
+  address        String?
+  isDeleted      Boolean          @default(false)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  bio            String?
+  addresses      Address[]
+  cart           Cart?
+  user           User             @relation(fields: [email], references: [email])
+  notifications  Notification[]
+  orders         Order[]
+  recentlyViewed RecentlyViewed[]
+  reviews        Review[]
+  sellerReviews  SellerReview[]
+  wishlist       Wishlist?
 
-    user           User             @relation(fields: [email], references: [email])
-    orders         Order[]
-    cart           Cart?
-    reviews        Review[]
-    wishlist       Wishlist?
-    addresses      Address[]
-    notifications  Notification[]
-    recentlyViewed RecentlyViewed[]
-    sellerReviews  SellerReview[]
-
-    @@map("customers")
+  @@map("customers")
 }
 
 model Address {
-    id           String   @id @default(uuid())
-    customerEmail String
-    label        String   @default("Home")
-    fullName     String
-    phone        String
-    line1        String
-    line2        String?
-    city         String
-    state        String
-    postalCode   String
-    country      String   @default("US")
-    isDefault    Boolean  @default(false)
-    createdAt    DateTime @default(now())
-    updatedAt    DateTime @updatedAt
+  id            String   @id @default(uuid())
+  customerEmail String
+  label         String   @default("Home")
+  fullName      String
+  phone         String
+  line1         String
+  line2         String?
+  city          String
+  state         String
+  postalCode    String
+  country       String   @default("US")
+  isDefault     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  customer      Customer @relation(fields: [customerEmail], references: [email])
+  orders        Order[]
 
-    customer Customer @relation(fields: [customerEmail], references: [email])
-    orders   Order[]
-
-    @@index([customerEmail])
-    @@map("addresses")
+  @@index([customerEmail])
+  @@map("addresses")
 }
 
 model Notification {
-    id           String           @id @default(uuid())
-    customerEmail String
-    type         NotificationType
-    title        String
-    message      String
-    isRead       Boolean          @default(false)
-    metadata     Json?
-    createdAt    DateTime         @default(now())
+  id            String           @id @default(uuid())
+  customerEmail String
+  type          NotificationType
+  title         String
+  message       String
+  isRead        Boolean          @default(false)
+  metadata      Json?
+  createdAt     DateTime         @default(now())
+  customer      Customer         @relation(fields: [customerEmail], references: [email])
 
-    customer Customer @relation(fields: [customerEmail], references: [email])
-
-    @@index([customerEmail])
-    @@index([isRead])
-    @@map("notifications")
+  @@index([customerEmail])
+  @@index([isRead])
+  @@map("notifications")
 }
 
 model RecentlyViewed {
-    id            String   @id @default(uuid())
-    customerEmail String
-    productId     String
-    viewedAt      DateTime @default(now())
+  id            String   @id @default(uuid())
+  customerEmail String
+  productId     String
+  viewedAt      DateTime @default(now())
+  customer      Customer @relation(fields: [customerEmail], references: [email])
+  product       Product  @relation(fields: [productId], references: [id])
 
-    customer Customer @relation(fields: [customerEmail], references: [email])
-    product  Product  @relation(fields: [productId], references: [id])
-
-    @@unique([customerEmail, productId])
-    @@index([customerEmail])
-    @@map("recently_viewed")
+  @@unique([customerEmail, productId])
+  @@index([customerEmail])
+  @@map("recently_viewed")
 }
 
 model SellerReview {
-    id            String   @id @default(uuid())
-    sellerEmail   String
-    customerEmail String
-    orderId       String   @unique
-    rating        Int
-    comment       String?
-    createdAt     DateTime @default(now())
+  id            String   @id @default(uuid())
+  sellerEmail   String
+  customerEmail String
+  orderId       String   @unique
+  rating        Int
+  comment       String?
+  createdAt     DateTime @default(now())
+  customer      Customer @relation(fields: [customerEmail], references: [email])
+  order         Order    @relation(fields: [orderId], references: [id])
+  seller        Seller   @relation(fields: [sellerEmail], references: [email])
 
-    seller   Seller   @relation(fields: [sellerEmail], references: [email])
-    customer Customer @relation(fields: [customerEmail], references: [email])
-    order    Order    @relation(fields: [orderId], references: [id])
-
-    @@unique([sellerEmail, customerEmail, orderId])
-    @@map("seller_reviews")
+  @@unique([sellerEmail, customerEmail, orderId])
+  @@map("seller_reviews")
 }
 
 model Payout {
-    id             String       @id @default(uuid())
-    sellerEmail    String
-    amount         Float
-    commission     Float
-    netAmount      Float
-    status         PayoutStatus @default(PENDING)
-    periodStart    DateTime
-    periodEnd      DateTime
-    transactionRef String?
-    processedAt    DateTime?
-    createdAt      DateTime     @default(now())
+  id             String       @id @default(uuid())
+  sellerEmail    String
+  amount         Float
+  commission     Float
+  netAmount      Float
+  status         PayoutStatus @default(PENDING)
+  periodStart    DateTime
+  periodEnd      DateTime
+  transactionRef String?
+  processedAt    DateTime?
+  createdAt      DateTime     @default(now())
+  seller         Seller       @relation(fields: [sellerEmail], references: [email])
 
-    seller Seller @relation(fields: [sellerEmail], references: [email])
-
-    @@index([sellerEmail])
-    @@map("payouts")
+  @@index([sellerEmail])
+  @@map("payouts")
 }
 
 model WithdrawalRequest {
-    id           String           @id @default(uuid())
-    sellerEmail  String
-    amount       Float
-    status       WithdrawalStatus @default(PENDING)
-    bankDetails  Json
-    adminNote    String?
-    processedAt  DateTime?
-    createdAt    DateTime         @default(now())
+  id          String           @id @default(uuid())
+  sellerEmail String
+  amount      Float
+  status      WithdrawalStatus @default(PENDING)
+  bankDetails Json
+  adminNote   String?
+  processedAt DateTime?
+  createdAt   DateTime         @default(now())
+  seller      Seller           @relation(fields: [sellerEmail], references: [email])
 
-    seller Seller @relation(fields: [sellerEmail], references: [email])
-
-    @@index([sellerEmail])
-    @@map("withdrawal_requests")
+  @@index([sellerEmail])
+  @@map("withdrawal_requests")
 }
 
 model AdminActivityLog {
-    id         String   @id @default(uuid())
-    adminEmail String
-    action     String
-    targetType String
-    targetId   String
-    metadata   Json?
-    ipAddress  String?
-    createdAt  DateTime @default(now())
+  id         String   @id @default(uuid())
+  adminEmail String
+  action     String
+  targetType String
+  targetId   String
+  metadata   Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+  admin      Admin    @relation(fields: [adminEmail], references: [email])
 
-    admin Admin @relation(fields: [adminEmail], references: [email])
-
-    @@index([adminEmail])
-    @@index([createdAt])
-    @@map("admin_activity_logs")
+  @@index([adminEmail])
+  @@index([createdAt])
+  @@map("admin_activity_logs")
 }
-
