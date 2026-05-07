@@ -47,19 +47,32 @@ const reviewProduct = async (
     productId: string,
     payload: { status: 'APPROVED' | 'REJECTED'; reviewNote?: string }
 ) => {
-    const approval = await prisma.productApproval.findUnique({ where: { productId } });
-    if (!approval) throw new ApiError(httpStatus.NOT_FOUND, 'Product approval record not found');
-    if (approval.status !== 'PENDING') {
-        throw new ApiError(httpStatus.BAD_REQUEST, `Product is already ${approval.status.toLowerCase()}`);
+    // Verify product exists and is in a reviewable state
+    const product = await prisma.product.findUnique({ where: { id: productId } });
+    if (!product) throw new ApiError(httpStatus.NOT_FOUND, 'Product not found');
+    if (product.isDeleted) throw new ApiError(httpStatus.GONE, 'Product has been deleted');
+
+    // Check existing approval record — allow missing record (product may pre-date approval system)
+    const existing = await prisma.productApproval.findUnique({ where: { productId } });
+    if (existing && existing.status !== 'PENDING') {
+        throw new ApiError(httpStatus.BAD_REQUEST, `Product is already ${existing.status.toLowerCase()}`);
     }
 
     const productStatus: ProductStatus = payload.status === 'APPROVED' ? 'PUBLISHED' : 'REJECTED';
 
     return prisma.$transaction(async (tnx) => {
-        // Update the approval record
-        const updated = await tnx.productApproval.update({
+        // Upsert the approval record (handles missing rows gracefully)
+        const updated = await tnx.productApproval.upsert({
             where: { productId },
-            data: {
+            create: {
+                productId,
+                status:     payload.status,
+                reviewedBy: adminEmail,
+                reviewNote: payload.reviewNote || null,
+                reviewedAt: new Date(),
+                submittedAt: new Date(),
+            },
+            update: {
                 status:     payload.status,
                 reviewedBy: adminEmail,
                 reviewNote: payload.reviewNote || null,

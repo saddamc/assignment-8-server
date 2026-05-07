@@ -111,6 +111,22 @@ const getAllProducts = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
+// Admin view — returns all products regardless of isPublished status
+const adminGetAllProducts = catchAsync(async (req: Request, res: Response) => {
+    const filters = pick(req.query, productFilterableFields);
+    const options = pick(req.query, ["page", "limit", "sortBy", "sortOrder"]);
+
+    const result = await ProductService.getAllProducts(filters, options, true);
+
+    sendResponse(res, {
+        statusCode: httpStatus.OK,
+        success: true,
+        message: "All products retrieved!",
+        meta: result.meta,
+        data: result.data
+    });
+});
+
 const getSellerProducts = catchAsync(async (req: Request, res: Response) => {
     const user = req.user!;
     const filters = pick(req.query, sellerProductFilterableFields);
@@ -226,6 +242,7 @@ export const ProductController = {
     // Product
     createProduct,
     getAllProducts,
+    adminGetAllProducts,
     getSellerProducts,
     getProductById,
     updateProduct,

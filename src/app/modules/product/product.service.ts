@@ -263,7 +263,7 @@ const createProduct = async (user: IJWTPayload, req: Request) => {
     return result;
 };
 
-const getAllProducts = async (params: any, options: IOptions) => {
+const getAllProducts = async (params: any, options: IOptions, adminView = false) => {
     const { page, limit, skip, sortBy, sortOrder } = paginationHelper.calculatePagination(options);
     const { searchTerm, categoryId, categorySlug, brandId, brandSlug, sellerEmail, minPrice, maxPrice, minRating, inStock, ...filterData } = params;
 
@@ -271,6 +271,11 @@ const getAllProducts = async (params: any, options: IOptions) => {
 
     // Always exclude deleted products
     andConditions.push({ isDeleted: false });
+
+    // Public listing: only show published products
+    if (!adminView) {
+        andConditions.push({ isPublished: true });
+    }
 
     if (searchTerm) {
         andConditions.push({

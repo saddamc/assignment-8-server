@@ -68,6 +68,12 @@ router.post(
     ProductController.createProduct
 );
 
+router.get(
+    '/admin/all',
+    auth(UserRole.ADMIN),
+    ProductController.adminGetAllProducts
+);
+
 router.get('/', ProductController.getAllProducts);
 router.get('/:id', ProductController.getProductById);
 
