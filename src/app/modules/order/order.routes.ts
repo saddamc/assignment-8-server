@@ -22,6 +22,13 @@ router.get(
     OrderController.getMyOrders
 );
 
+// Seller views their orders  ← MUST be before /:id
+router.get(
+    '/seller-orders',
+    auth(UserRole.SELLER),
+    OrderController.getSellerOrders
+);
+
 // Admin gets all orders
 router.get(
     '/',
@@ -32,11 +39,11 @@ router.get(
 // Customer or Admin gets order by id
 router.get(
     '/:id',
-    auth(UserRole.CUSTOMER, UserRole.ADMIN),
+    auth(UserRole.CUSTOMER, UserRole.ADMIN, UserRole.SELLER),
     OrderController.getOrderById
 );
 
-// Admin updates order status
+// Admin or Seller updates order status
 router.patch(
     '/:id/status',
     auth(UserRole.ADMIN, UserRole.SELLER),
@@ -51,11 +58,12 @@ router.patch(
     OrderController.cancelOrder
 );
 
-// Seller views their orders
-router.get(
-    '/seller-orders',
-    auth(UserRole.SELLER),
-    OrderController.getSellerOrders
+// Seller / Admin adds or updates shipment tracking
+router.post(
+    '/:id/shipment',
+    auth(UserRole.ADMIN, UserRole.SELLER),
+    validateRequest(OrderValidation.addShipmentValidationSchema),
+    OrderController.addShipment
 );
 
 export const orderRoutes = router;

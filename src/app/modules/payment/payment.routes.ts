@@ -12,6 +12,13 @@ router.post(
     PaymentController.createPaymentIntent
 );
 
+// Create Stripe Checkout Session (redirects to Stripe-hosted checkout page)
+router.post(
+    '/create-checkout-session',
+    auth(UserRole.CUSTOMER),
+    PaymentController.createCheckoutSession
+);
+
 // Get payment details for an order
 router.get(
     '/:orderId',

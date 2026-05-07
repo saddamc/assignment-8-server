@@ -84,6 +84,12 @@ const getSellerOrders = catchAsync(async (req: Request, res: Response) => {
     sendResponse(res, { statusCode: httpStatus.OK, success: true, message: 'Seller orders fetched', meta: result.meta, data: result.data });
 });
 
+const addShipment = catchAsync(async (req: Request, res: Response) => {
+    const id = getParamAsString(req.params.id, "id");
+    const result = await OrderService.addShipment(req.user!, id, req.body);
+    sendResponse(res, { statusCode: httpStatus.OK, success: true, message: 'Shipment updated', data: result });
+});
+
 export const OrderController = {
     createOrder,
     getMyOrders,
@@ -92,5 +98,6 @@ export const OrderController = {
     updateOrderStatus,
     cancelOrder,
     getSellerOrders,
+    addShipment,
 }
 

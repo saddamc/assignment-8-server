@@ -5,7 +5,17 @@ import httpStatus from "http-status";
 import { IJWTPayload } from "../../types/common";
 import { IOptions, paginationHelper } from "../../helper/paginationHelper";
 
-const createOrder = async (user: IJWTPayload, payload: { shippingAddress: string }) => {
+interface ICreateOrderPayload {
+    shippingAddress?: string;
+    addressId?: string;
+    couponCode?: string;
+    paymentMethod?: "STRIPE" | "COD";
+    notes?: string;
+}
+
+const createOrder = async (user: IJWTPayload, payload: ICreateOrderPayload) => {
+    const { shippingAddress, addressId, couponCode, paymentMethod = "STRIPE", notes } = payload;
+
     // Get customer's cart with items
     const cart = await prisma.cart.findUnique({
         where: { customerEmail: user.email },
@@ -20,7 +30,7 @@ const createOrder = async (user: IJWTPayload, payload: { shippingAddress: string
         throw new ApiError(httpStatus.BAD_REQUEST, "Cart is empty!");
     }
 
-    // Calculate total and validate stock
+    // Calculate total and validate stock (soft-check only — stock reserved on payment)
     let totalAmount = 0;
     for (const item of cart.items) {
         if (item.product.stock < item.quantity) {
@@ -33,21 +43,44 @@ const createOrder = async (user: IJWTPayload, payload: { shippingAddress: string
         totalAmount += discountedPrice * item.quantity;
     }
 
-    // Create order in a transaction
+    // Apply coupon if provided
+    let discountAmount = 0;
+    if (couponCode) {
+        const coupon = await prisma.coupon.findFirst({
+            where: { code: couponCode, isActive: true }
+        });
+        if (coupon && (!coupon.expiresAt || coupon.expiresAt > new Date())) {
+            if (totalAmount >= coupon.minOrderAmount) {
+                discountAmount = coupon.discountType === "PERCENTAGE"
+                    ? totalAmount * (coupon.discountValue / 100)
+                    : coupon.discountValue;
+                discountAmount = Math.min(discountAmount, totalAmount);
+            }
+        }
+    }
+
+    const finalTotal = totalAmount - discountAmount;
+
+    // Create order in a transaction (NO stock decrement here — deducted after payment)
     const result = await prisma.$transaction(async (tnx) => {
-        // Create order
         const order = await tnx.order.create({
             data: {
                 customerEmail: user.email,
-                totalAmount,
-                shippingAddress: payload.shippingAddress
+                totalAmount: finalTotal,
+                discountAmount,
+                couponCode: couponCode ?? null,
+                shippingAddress: shippingAddress ?? null,
+                addressId: addressId ?? null,
+                paymentMethod,
+                notes: notes ?? null,
+                // COD orders go straight to PENDING; online orders await payment
+                status: paymentMethod === "COD" ? "PENDING" : "PENDING",
+                paymentStatus: paymentMethod === "COD" ? "UNPAID" : "UNPAID"
             }
         });
 
-        // Create order items and update stock
         for (const item of cart.items) {
             const discountedPrice = item.product.price * (1 - item.product.discount / 100);
-
             await tnx.orderItem.create({
                 data: {
                     orderId: order.id,
@@ -56,37 +89,23 @@ const createOrder = async (user: IJWTPayload, payload: { shippingAddress: string
                     price: discountedPrice
                 }
             });
-
-            // Reduce stock
-            await tnx.product.update({
-                where: { id: item.productId },
-                data: {
-                    stock: {
-                        decrement: item.quantity
-                    }
-                }
-            });
         }
 
-        // Clear cart
-        await tnx.cartItem.deleteMany({
-            where: { cartId: cart.id }
-        });
+        // For COD orders, clear the cart now; for online payment, cart is cleared in webhook
+        if (paymentMethod === "COD") {
+            await tnx.cartItem.deleteMany({ where: { cartId: cart.id } });
+        }
 
         return order;
     });
 
-    // Get the full order with items
     const fullOrder = await prisma.order.findUnique({
         where: { id: result.id },
         include: {
             items: {
                 include: {
                     product: {
-                        select: {
-                            name: true,
-                            images: true
-                        }
+                        select: { name: true, images: true }
                     }
                 }
             }
@@ -261,22 +280,86 @@ const updateOrderStatus = async (id: string, payload: { status: OrderStatus }) =
 };
 
 const cancelOrder = async (user: IJWTPayload, id: string) => {
-    const order = await prisma.order.findFirst({ where: { id, customerEmail: user.email } });
+    const order = await prisma.order.findFirst({
+        where: { id, customerEmail: user.email },
+        include: { items: true }
+    });
     if (!order) throw new ApiError(httpStatus.NOT_FOUND, 'Order not found');
-    if (order.status !== OrderStatus.PENDING) {
-        throw new ApiError(httpStatus.BAD_REQUEST, 'Only PENDING orders can be cancelled');
+    if (order.status === OrderStatus.DELIVERED || order.status === OrderStatus.CANCELLED) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'This order cannot be cancelled');
     }
 
-    const orderItems = await prisma.orderItem.findMany({ where: { orderId: id } });
-
     await prisma.$transaction(async (tnx) => {
-        for (const item of orderItems) {
-            await tnx.product.update({ where: { id: item.productId }, data: { stock: { increment: item.quantity } } });
+        // Only restore stock if it was already decremented (i.e. order was PAID / COD)
+        const stockWasDeducted = order.paymentStatus === "PAID" || order.paymentMethod === "COD";
+        if (stockWasDeducted) {
+            for (const item of order.items) {
+                await tnx.product.update({
+                    where: { id: item.productId },
+                    data: { stock: { increment: item.quantity } }
+                });
+            }
         }
-        await tnx.order.update({ where: { id }, data: { status: OrderStatus.CANCELLED } });
+        await tnx.order.update({
+            where: { id },
+            data: {
+                status: OrderStatus.CANCELLED,
+                paymentStatus: order.paymentStatus === "PAID" ? "REFUNDED" : order.paymentStatus
+            }
+        });
     });
 
-    return prisma.order.findUnique({ where: { id }, include: { items: { include: { product: { select: { name: true } } } } } });
+    return prisma.order.findUnique({
+        where: { id },
+        include: { items: { include: { product: { select: { name: true } } } } }
+    });
+};
+
+const addShipment = async (user: IJWTPayload, orderId: string, payload: {
+    carrier?: string;
+    trackingNumber?: string;
+    trackingUrl?: string;
+    estimatedDelivery?: string;
+    notes?: string;
+}) => {
+    const order = await prisma.order.findUniqueOrThrow({ where: { id: orderId } });
+
+    if (user.role !== "ADMIN") {
+        // Seller can only update shipments on their own orders
+        const sellerItem = await prisma.orderItem.findFirst({
+            where: { orderId, product: { sellerEmail: user.email } }
+        });
+        if (!sellerItem) throw new ApiError(httpStatus.FORBIDDEN, "Not your order");
+    }
+
+    const shipment = await prisma.shipment.upsert({
+        where: { orderId },
+        update: {
+            carrier: payload.carrier,
+            trackingNumber: payload.trackingNumber,
+            trackingUrl: payload.trackingUrl,
+            estimatedDelivery: payload.estimatedDelivery ? new Date(payload.estimatedDelivery) : undefined,
+            notes: payload.notes,
+            shippedAt: payload.trackingNumber && !await prisma.shipment.findUnique({ where: { orderId } }).then(s => s?.shippedAt)
+                ? new Date() : undefined
+        },
+        create: {
+            orderId,
+            carrier: payload.carrier,
+            trackingNumber: payload.trackingNumber,
+            trackingUrl: payload.trackingUrl,
+            estimatedDelivery: payload.estimatedDelivery ? new Date(payload.estimatedDelivery) : undefined,
+            notes: payload.notes,
+            shippedAt: payload.trackingNumber ? new Date() : undefined
+        }
+    });
+
+    // Auto-advance order to SHIPPED if tracking added
+    if (payload.trackingNumber && order.status === "PACKED") {
+        await prisma.order.update({ where: { id: orderId }, data: { status: "SHIPPED" } });
+    }
+
+    return shipment;
 };
 
 const getSellerOrders = async (user: IJWTPayload, options: IOptions) => {
@@ -304,5 +387,6 @@ export const OrderService = {
     updateOrderStatus,
     cancelOrder,
     getSellerOrders,
+    addShipment,
 }
 

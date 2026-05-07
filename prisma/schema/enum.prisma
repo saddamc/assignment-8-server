@@ -10,11 +10,14 @@ enum UserStatus {
 }
 
 enum OrderStatus {
-  PENDING
-  PROCESSING
-  SHIPPED
-  DELIVERED
+  PENDING          // Awaiting payment (online) or seller acceptance (COD)
+  PROCESSING       // Payment confirmed / seller accepted
+  PACKED           // Items packed, ready for courier pickup
+  SHIPPED          // Handed to carrier
+  ON_THE_WAY       // Out for delivery
+  DELIVERED        // Delivered to customer
   CANCELLED
+  REFUNDED
 }
 
 enum PaymentStatus {

@@ -30,6 +30,8 @@ model Order {
   status          OrderStatus   @default(PENDING)
   paymentStatus   PaymentStatus @default(UNPAID)
   transactionId   String?
+  stripeSessionId String?       @unique
+  paymentMethod   String        @default("STRIPE") // STRIPE | COD
   shippingAddress String?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
@@ -41,6 +43,7 @@ model Order {
   taxAmount       Float         @default(0)
   disputes        Dispute[]
   items           OrderItem[]
+  shipment        Shipment?
   address         Address?      @relation(fields: [addressId], references: [id])
   customer        Customer      @relation(fields: [customerEmail], references: [email])
   sellerReview    SellerReview?
@@ -100,4 +103,21 @@ model Dispute {
   @@index([orderId])
   @@index([status])
   @@map("disputes")
+}
+
+model Shipment {
+  id                String    @id @default(uuid())
+  orderId           String    @unique
+  carrier           String?
+  trackingNumber    String?
+  trackingUrl       String?
+  estimatedDelivery DateTime?
+  shippedAt         DateTime?
+  deliveredAt       DateTime?
+  notes             String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  order             Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("shipments")
 }
