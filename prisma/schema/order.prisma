@@ -1,0 +1,59 @@
+model Cart {
+    id            String     @id @default(uuid())
+    customerEmail String     @unique
+    createdAt     DateTime   @default(now())
+    updatedAt     DateTime   @updatedAt
+
+    customer Customer   @relation(fields: [customerEmail], references: [email])
+    items    CartItem[]
+
+    @@map("carts")
+}
+
+model CartItem {
+    id        String   @id @default(uuid())
+    cartId    String
+    productId String
+    quantity  Int
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    cart    Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+    product Product @relation(fields: [productId], references: [id])
+
+    @@unique([cartId, productId])
+    @@map("cart_items")
+}
+
+model Order {
+    id            String        @id @default(uuid())
+    customerEmail String
+    totalAmount   Float
+    status        OrderStatus   @default(PENDING)
+    paymentStatus PaymentStatus @default(UNPAID)
+    transactionId String?
+    shippingAddress String?
+    createdAt     DateTime      @default(now())
+    updatedAt     DateTime      @updatedAt
+
+    customer Customer    @relation(fields: [customerEmail], references: [email])
+    items    OrderItem[]
+
+    @@index([customerEmail])
+    @@index([status])
+    @@map("orders")
+}
+
+model OrderItem {
+    id        String   @id @default(uuid())
+    orderId   String
+    productId String
+    quantity  Int
+    price     Float
+    createdAt DateTime @default(now())
+
+    order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+    product Product @relation(fields: [productId], references: [id])
+
+    @@map("order_items")
+}

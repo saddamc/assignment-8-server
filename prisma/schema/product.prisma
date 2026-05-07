@@ -1,0 +1,73 @@
+model Category {
+    id          String    @id @default(uuid())
+    name        String    @unique
+    slug        String    @unique
+    image       String?
+    description String?
+    createdAt   DateTime  @default(now())
+    updatedAt   DateTime  @updatedAt
+    products    Product[]
+
+    @@index([slug])
+    @@map("categories")
+}
+
+model Brand {
+    id          String    @id @default(uuid())
+    name        String    @unique
+    slug        String    @unique
+    logo        String?
+    description String?
+    createdAt   DateTime  @default(now())
+    updatedAt   DateTime  @updatedAt
+    products    Product[]
+
+    @@index([slug])
+    @@map("brands")
+}
+
+model Product {
+    id          String   @id @default(uuid())
+    name        String
+    description String
+    price       Float
+    discount    Float    @default(0)
+    stock       Int      @default(0)
+    images      String[]
+    categoryId  String
+    brandId     String?
+    sellerEmail String
+    isDeleted   Boolean  @default(false)
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+
+    category      Category     @relation(fields: [categoryId], references: [id])
+    brand         Brand?       @relation(fields: [brandId], references: [id])
+    seller        Seller       @relation(fields: [sellerEmail], references: [email])
+    reviews       Review[]
+    cartItems     CartItem[]
+    orderItems    OrderItem[]
+    wishlistItems WishlistItem[]
+
+    @@index([categoryId])
+    @@index([brandId])
+    @@index([sellerEmail])
+    @@index([price])
+    @@map("products")
+}
+
+model Review {
+    id            String   @id @default(uuid())
+    rating        Int
+    comment       String?
+    productId     String
+    customerEmail String
+    createdAt     DateTime @default(now())
+    updatedAt     DateTime @updatedAt
+
+    product  Product  @relation(fields: [productId], references: [id])
+    customer Customer @relation(fields: [customerEmail], references: [email])
+
+    @@unique([productId, customerEmail])
+    @@map("reviews")
+}

@@ -1,0 +1,42 @@
+{
+  "name": "e-commerce-server",
+  "version": "1.0.0",
+  "main": "server.js",
+  "author": "",
+  "license": "MIT",
+  "prisma": {
+    "schema": "./prisma/schema"
+  },
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only ./src/server.ts",
+    "seed": "ts-node --transpile-only ./prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.16.3",
+    "@types/nodemailer": "^8.0.0",
+    "bcryptjs": "^3.0.2",
+    "cloudinary": "^2.7.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0",
+    "http-status": "^2.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.0.2",
+    "nodemailer": "^8.0.7",
+    "stripe": "^19.1.0",
+    "zod": "^4.1.11"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cookie-parser": "^1.4.9",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/multer": "^2.0.0",
+    "@types/node": "^24.5.0",
+    "prisma": "^6.16.3",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.9.2"
+  }
+}

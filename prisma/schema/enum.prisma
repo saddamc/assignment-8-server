@@ -1,0 +1,25 @@
+enum UserRole {
+    CUSTOMER
+    SELLER
+    ADMIN
+}
+
+enum UserStatus {
+    ACTIVE
+    BLOCKED
+}
+
+enum OrderStatus {
+    PENDING
+    PROCESSING
+    SHIPPED
+    DELIVERED
+    CANCELLED
+}
+
+enum PaymentStatus {
+    UNPAID
+    PAID
+    FAILED
+    REFUNDED
+}
