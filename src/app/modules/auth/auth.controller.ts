@@ -7,6 +7,32 @@ import config from "../../../config";
 
 const isProduction = config.node_env === "production";
 
+const parseJwtDuration = (value: string | undefined, fallback = "1h") => {
+    const raw = (value || fallback).trim();
+    const match = raw.match(/^(\d+)(s|m|h|d|y)?$/i);
+    if (!match) {
+        return 1000 * 60 * 60;
+    }
+
+    const amount = Number(match[1]);
+    const unit = match[2]?.toLowerCase() || "s";
+
+    switch (unit) {
+        case "s":
+            return amount * 1000;
+        case "m":
+            return amount * 60 * 1000;
+        case "h":
+            return amount * 60 * 60 * 1000;
+        case "d":
+            return amount * 24 * 60 * 60 * 1000;
+        case "y":
+            return amount * 365 * 24 * 60 * 60 * 1000;
+        default:
+            return amount * 1000;
+    }
+};
+
 // ─── Register ────────────────────────────────────────────────────────────────
 
 const register = catchAsync(async (req: Request, res: Response) => {
@@ -16,14 +42,14 @@ const register = catchAsync(async (req: Request, res: Response) => {
     res.cookie("accessToken", accessToken, {
         secure: isProduction,
         httpOnly: true,
-        sameSite: isProduction ? "none" : "lax",
-        maxAge: 1000 * 60 * 60
+        sameSite: "none",
+        maxAge: parseJwtDuration(config.jwt.expires_in as string, "1h"),
     });
     res.cookie("refreshToken", refreshToken, {
         secure: isProduction,
         httpOnly: true,
-        sameSite: isProduction ? "none" : "lax",
-        maxAge: 1000 * 60 * 60 * 24 * 90
+        sameSite: "none",
+        maxAge: parseJwtDuration(config.jwt.refresh_token_expires_in as string, "90d"),
     });
 
     sendResponse(res, {
@@ -43,14 +69,14 @@ const login = catchAsync(async (req: Request, res: Response) => {
     res.cookie("accessToken", accessToken, {
         secure: isProduction,
         httpOnly: true,
-        sameSite: isProduction ? "none" : "lax",
-        maxAge: 1000 * 60 * 60
+        sameSite: "none",
+        maxAge: parseJwtDuration(config.jwt.expires_in as string, "1h"),
     });
     res.cookie("refreshToken", refreshToken, {
         secure: isProduction,
         httpOnly: true,
-        sameSite: isProduction ? "none" : "lax",
-        maxAge: 1000 * 60 * 60 * 24 * 90
+        sameSite: "none",
+        maxAge: parseJwtDuration(config.jwt.refresh_token_expires_in as string, "90d"),
     });
 
     sendResponse(res, {
@@ -73,12 +99,12 @@ const logout = catchAsync(async (req: Request, res: Response) => {
     res.clearCookie("accessToken", {
         secure: isProduction,
         httpOnly: true,
-        sameSite: isProduction ? "none" : "lax"
+        sameSite: "none"
     });
     res.clearCookie("refreshToken", {
         secure: isProduction,
         httpOnly: true,
-        sameSite: isProduction ? "none" : "lax"
+        sameSite: "none"
     });
 
     sendResponse(res, {
@@ -99,8 +125,8 @@ const refreshToken = catchAsync(async (req: Request, res: Response) => {
     res.cookie("accessToken", result.accessToken, {
         secure: isProduction,
         httpOnly: true,
-        sameSite: isProduction ? "none" : "lax",
-        maxAge: 1000 * 60 * 60
+        sameSite: "none",
+        maxAge: parseJwtDuration(config.jwt.expires_in as string, "1h"),
     });
 
     sendResponse(res, {

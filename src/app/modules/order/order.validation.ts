@@ -4,6 +4,7 @@ const createOrderValidationSchema = z.object({
     body: z.object({
         shippingAddress: z.string().optional(),
         addressId: z.string().optional(),
+        contactNumber: z.string().optional(),
         couponCode: z.string().optional(),
         paymentMethod: z.enum(["STRIPE", "COD"]).default("STRIPE"),
         notes: z.string().optional()

@@ -265,7 +265,38 @@ const createProduct = async (user: IJWTPayload, req: Request) => {
 
 const getAllProducts = async (params: any, options: IOptions, adminView = false) => {
     const { page, limit, skip, sortBy, sortOrder } = paginationHelper.calculatePagination(options);
-    const { searchTerm, categoryId, categorySlug, brandId, brandSlug, sellerEmail, minPrice, maxPrice, minRating, inStock, ...filterData } = params;
+    const { searchTerm, categoryId, categoryIds, categorySlug, brandId, brandIds, brandSlug, sellerEmail, minPrice, maxPrice, priceRanges, minRating, inStock, ...filterData } = params;
+
+    const categoryIdsArray = Array.isArray(categoryIds)
+        ? categoryIds.flatMap((value) => String(value).split(",").filter(Boolean))
+        : typeof categoryIds === "string"
+            ? categoryIds.split(",").filter(Boolean)
+            : [];
+
+    const brandIdsArray = Array.isArray(brandIds)
+        ? brandIds.flatMap((value) => String(value).split(",").filter(Boolean))
+        : typeof brandIds === "string"
+            ? brandIds.split(",").filter(Boolean)
+            : [];
+
+    const rangeConditions: Prisma.ProductWhereInput[] = [];
+    const priceRangesArray = Array.isArray(priceRanges)
+        ? priceRanges.flatMap((value) => String(value).split(",").filter(Boolean))
+        : typeof priceRanges === "string"
+            ? priceRanges.split(",").filter(Boolean)
+            : [];
+
+    if (priceRangesArray.length > 0) {
+        for (const range of priceRangesArray) {
+            const [min, max] = range.split("-");
+            const priceCondition: any = {};
+            if (min) priceCondition.gte = Number(min);
+            if (max) priceCondition.lte = Number(max);
+            if (Object.keys(priceCondition).length > 0) {
+                rangeConditions.push({ price: priceCondition });
+            }
+        }
+    }
 
     const andConditions: Prisma.ProductWhereInput[] = [];
 
@@ -285,13 +316,26 @@ const getAllProducts = async (params: any, options: IOptions, adminView = false)
         });
     }
 
-    if (categoryId) andConditions.push({ categoryId });
+    if (categoryIdsArray.length > 0) {
+        andConditions.push({ categoryId: { in: categoryIdsArray } });
+    } else if (categoryId) {
+        andConditions.push({ categoryId });
+    }
+
     if (categorySlug) andConditions.push({ category: { slug: categorySlug } });
-    if (brandId) andConditions.push({ brandId });
+
+    if (brandIdsArray.length > 0) {
+        andConditions.push({ brandId: { in: brandIdsArray } });
+    } else if (brandId) {
+        andConditions.push({ brandId });
+    }
+
     if (brandSlug) andConditions.push({ brand: { slug: brandSlug } });
     if (sellerEmail) andConditions.push({ sellerEmail });
 
-    if (minPrice || maxPrice) {
+    if (priceRangesArray.length > 0 && rangeConditions.length > 0) {
+        andConditions.push({ OR: rangeConditions });
+    } else if (minPrice || maxPrice) {
         const priceCondition: any = {};
         if (minPrice) priceCondition.gte = Number(minPrice);
         if (maxPrice) priceCondition.lte = Number(maxPrice);

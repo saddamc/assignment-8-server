@@ -8,13 +8,14 @@ import { IOptions, paginationHelper } from "../../helper/paginationHelper";
 interface ICreateOrderPayload {
     shippingAddress?: string;
     addressId?: string;
+    contactNumber?: string;
     couponCode?: string;
     paymentMethod?: "STRIPE" | "COD";
     notes?: string;
 }
 
 const createOrder = async (user: IJWTPayload, payload: ICreateOrderPayload) => {
-    const { shippingAddress, addressId, couponCode, paymentMethod = "STRIPE", notes } = payload;
+    const { shippingAddress, addressId, contactNumber, couponCode, paymentMethod = "STRIPE", notes } = payload;
 
     // Get customer's cart with items
     const cart = await prisma.cart.findUnique({
@@ -71,6 +72,7 @@ const createOrder = async (user: IJWTPayload, payload: ICreateOrderPayload) => {
                 couponCode: couponCode ?? null,
                 shippingAddress: shippingAddress ?? null,
                 addressId: addressId ?? null,
+                contactNumber: contactNumber ?? null,
                 paymentMethod,
                 notes: notes ?? null,
                 // COD orders go straight to PENDING; online orders await payment

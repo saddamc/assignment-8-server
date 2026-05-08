@@ -30,7 +30,31 @@ const getMyReviews = catchAsync(async (req: Request, res: Response) => {
     sendResponse(res, { statusCode: httpStatus.OK, success: true, message: 'My reviews fetched', data: result });
 });
 
-export const ReviewController = { getProductReviews, createReview, updateReview, deleteReview, getMyReviews };
+const getSellerReviews = catchAsync(async (req: Request, res: Response) => {
+    const result = await ReviewService.getSellerReviews(req.params.sellerEmail as string, req.query as any);
+    sendResponse(res, { statusCode: httpStatus.OK, success: true, message: 'Seller reviews fetched', data: result });
+});
+
+const createSellerReview = catchAsync(async (req: Request, res: Response) => {
+    const result = await ReviewService.createSellerReview(req.user as IJWTPayload, req.params.orderId as string, req.body);
+    sendResponse(res, { statusCode: httpStatus.CREATED, success: true, message: 'Seller review created', data: result });
+});
+
+const getMySellerReviews = catchAsync(async (req: Request, res: Response) => {
+    const result = await ReviewService.getMySellerReviews(req.user as IJWTPayload, req.query as any);
+    sendResponse(res, { statusCode: httpStatus.OK, success: true, message: 'My seller reviews fetched', data: result });
+});
+
+export const ReviewController = { 
+    getProductReviews, 
+    createReview, 
+    updateReview, 
+    deleteReview, 
+    getMyReviews,
+    getSellerReviews,
+    createSellerReview,
+    getMySellerReviews
+};
 
 
 
