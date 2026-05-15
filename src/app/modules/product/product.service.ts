@@ -186,8 +186,8 @@ const createProduct = async (user: IJWTPayload, req: Request) => {
         await prisma.category.findUniqueOrThrow({ where: { id: req.body.childCategoryId } });
     }
 
-    // Auto-generate slug from name
-    const baseSlug = generateSlug(req.body.name);
+    // Auto-generate slug from name or provided slug
+    const baseSlug = generateSlug(req.body.slug || req.body.name);
     let slug = baseSlug;
     let slugSuffix = 1;
     while (await prisma.product.findUnique({ where: { slug } })) {
@@ -414,9 +414,15 @@ const getAllProducts = async (params: any, options: IOptions, adminView = false)
     };
 };
 
-const getProductById = async (id: string) => {
-    const result = await prisma.product.findUniqueOrThrow({
-        where: { id, isDeleted: false },
+const getProductById = async (idOrSlug: string) => {
+    const result = await prisma.product.findFirst({
+        where: { 
+            OR: [
+                { id: idOrSlug },
+                { slug: idOrSlug }
+            ],
+            isDeleted: false 
+        },
         include: {
             category: true,
             subCategory: true,
@@ -448,6 +454,11 @@ const getProductById = async (id: string) => {
             }
         }
     });
+
+    if (!result) {
+        throw new ApiError(httpStatus.NOT_FOUND, "Product not found");
+    }
+
     return result;
 };
 
@@ -516,6 +527,19 @@ const updateProduct = async (id: string, user: IJWTPayload, req: Request) => {
 
     const updateData: Prisma.ProductUpdateInput = {};
     if (hasValue(req.body.name)) updateData.name = String(req.body.name).trim();
+
+    if (hasValue(req.body.slug)) {
+        const baseSlug = generateSlug(String(req.body.slug));
+        let slug = baseSlug;
+        let slugSuffix = 1;
+        while (true) {
+            const existing = await prisma.product.findUnique({ where: { slug } });
+            if (!existing || existing.id === id) break;
+            slug = `${baseSlug}-${slugSuffix++}`;
+        }
+        updateData.slug = slug;
+    }
+
     if (hasValue(req.body.shortDescription)) updateData.shortDescription = toOptionalString(req.body.shortDescription);
     if (hasValue(req.body.description)) updateData.description = String(req.body.description).trim();
     if (hasValue(req.body.price)) updateData.price = Number(req.body.price);
