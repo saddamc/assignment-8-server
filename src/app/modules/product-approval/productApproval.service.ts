@@ -139,6 +139,9 @@ const submitForReview = async (sellerEmail: string, productId: string) => {
     const product = await prisma.product.findFirst({ where: { id: productId, sellerEmail } });
     if (!product) throw new ApiError(httpStatus.NOT_FOUND, 'Product not found or not yours');
 
+    const seller = await prisma.seller.findUnique({ where: { email: sellerEmail } });
+    if (!seller) throw new ApiError(httpStatus.NOT_FOUND, 'Seller not found');
+
     if (product.status === 'PUBLISHED') {
         throw new ApiError(httpStatus.BAD_REQUEST, 'Product is already published');
     }
@@ -149,19 +152,50 @@ const submitForReview = async (sellerEmail: string, productId: string) => {
         throw new ApiError(httpStatus.BAD_REQUEST, 'Product is already under review');
     }
 
+    const shouldAutoApprove = seller.isApproved && seller.autoApproveProducts;
+
     return prisma.$transaction(async (tnx) => {
-        // Set product to PENDING
         await tnx.product.update({
             where: { id: productId },
-            data: { status: 'PENDING', isPublished: false }
+            data: {
+                status: shouldAutoApprove ? ProductStatus.PUBLISHED : ProductStatus.PENDING,
+                isPublished: shouldAutoApprove,
+            }
         });
 
-        // Upsert approval record
         const approval = await tnx.productApproval.upsert({
             where:  { productId },
-            create: { productId, status: 'PENDING', submittedAt: new Date() },
-            update: { status: 'PENDING', reviewedBy: null, reviewNote: null, reviewedAt: null, submittedAt: new Date() }
+            create: shouldAutoApprove
+                ? {
+                    productId,
+                    status: 'APPROVED',
+                    reviewedBy: 'system:auto-approve',
+                    reviewNote: 'Auto-approved: trusted seller',
+                    reviewedAt: new Date(),
+                    submittedAt: new Date(),
+                }
+                : { productId, status: 'PENDING', submittedAt: new Date() },
+            update: shouldAutoApprove
+                ? {
+                    status: 'APPROVED',
+                    reviewedBy: 'system:auto-approve',
+                    reviewNote: 'Auto-approved: trusted seller',
+                    reviewedAt: new Date(),
+                    submittedAt: new Date(),
+                }
+                : { status: 'PENDING', reviewedBy: null, reviewNote: null, reviewedAt: null, submittedAt: new Date() }
         });
+
+        if (shouldAutoApprove) {
+            await tnx.productApprovalHistory.create({
+                data: {
+                    productId,
+                    status: 'APPROVED',
+                    reviewedBy: 'system:auto-approve',
+                    reviewNote: 'Auto-approved: trusted seller',
+                }
+            });
+        }
 
         return approval;
     });

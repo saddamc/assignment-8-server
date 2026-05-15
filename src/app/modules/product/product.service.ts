@@ -8,6 +8,14 @@ import ApiError from "../../errors/ApiError";
 import httpStatus from "http-status";
 import { IJWTPayload } from "../../types/common";
 
+interface ProductVariantMutationPayload {
+    sku?: string;
+    size?: string;
+    color?: string;
+    stock?: number;
+    price?: number;
+}
+
 // ===================== CATEGORY =====================
 
 const generateSlug = (name: string) =>
@@ -411,14 +419,21 @@ const getProductById = async (id: string) => {
         where: { id, isDeleted: false },
         include: {
             category: true,
+            subCategory: true,
+            childCategory: true,
             brand: true,
+            variants: true,
+            approval: true,
             seller: {
                 select: {
                     id: true,
                     name: true,
                     storeName: true,
                     email: true,
-                    profilePhoto: true
+                    profilePhoto: true,
+                    isApproved: true,
+                    autoApproveProducts: true,
+                    trustScore: true,
                 }
             },
             reviews: {
@@ -447,24 +462,154 @@ const updateProduct = async (id: string, user: IJWTPayload, req: Request) => {
     }
 
     const files = req.files as Express.Multer.File[];
+    const uploadedImages: string[] = [];
     if (files && files.length > 0) {
-        const images: string[] = [];
         for (const file of files) {
             const uploadResult = await fileUploader.uploadToCloudinary(file);
             if (uploadResult?.secure_url) {
-                images.push(uploadResult.secure_url);
+                uploadedImages.push(uploadResult.secure_url);
             }
         }
-        req.body.images = images;
     }
 
-    if (req.body.price) req.body.price = Number(req.body.price);
-    if (req.body.discount) req.body.discount = Number(req.body.discount);
-    if (req.body.stock) req.body.stock = Number(req.body.stock);
+    const hasValue = (value: unknown) => value !== undefined && value !== null && value !== "";
+    const toOptionalString = (value: unknown) => {
+        if (!hasValue(value)) return undefined;
+        const next = String(value).trim();
+        return next || undefined;
+    };
+
+    let existingImages: string[] | undefined;
+    if (hasValue(req.body.existingImages)) {
+        try {
+            const parsed = typeof req.body.existingImages === "string"
+                ? JSON.parse(req.body.existingImages)
+                : req.body.existingImages;
+            if (Array.isArray(parsed)) {
+                existingImages = parsed.filter((img) => typeof img === "string" && img.trim().length > 0);
+            }
+        } catch {
+            throw new ApiError(httpStatus.BAD_REQUEST, "Invalid existingImages format");
+        }
+    }
+
+    const requestedStatus = toOptionalString(req.body.status) as ProductStatus | undefined;
+    if (requestedStatus && !Object.values(ProductStatus).includes(requestedStatus)) {
+        throw new ApiError(httpStatus.BAD_REQUEST, "Invalid product status");
+    }
+
+    let seoKeywords: string[] | undefined;
+    if (hasValue(req.body.seoKeywords)) {
+        try {
+            const parsed = typeof req.body.seoKeywords === "string"
+                ? JSON.parse(req.body.seoKeywords)
+                : req.body.seoKeywords;
+            if (Array.isArray(parsed)) {
+                seoKeywords = parsed.map((k) => String(k).trim()).filter(Boolean);
+            } else {
+                throw new Error("Invalid SEO keywords");
+            }
+        } catch {
+            throw new ApiError(httpStatus.BAD_REQUEST, "Invalid seoKeywords format");
+        }
+    }
+
+    const updateData: Prisma.ProductUpdateInput = {};
+    if (hasValue(req.body.name)) updateData.name = String(req.body.name).trim();
+    if (hasValue(req.body.shortDescription)) updateData.shortDescription = toOptionalString(req.body.shortDescription);
+    if (hasValue(req.body.description)) updateData.description = String(req.body.description).trim();
+    if (hasValue(req.body.price)) updateData.price = Number(req.body.price);
+    if (hasValue(req.body.discountPrice)) updateData.discountPrice = Number(req.body.discountPrice);
+    if (hasValue(req.body.discount)) updateData.discount = Number(req.body.discount);
+    if (hasValue(req.body.sku)) updateData.sku = toOptionalString(req.body.sku);
+    if (hasValue(req.body.stock)) updateData.stock = Number(req.body.stock);
+    if (hasValue(req.body.categoryId)) updateData.categoryId = toOptionalString(req.body.categoryId);
+    if (hasValue(req.body.subCategoryId)) updateData.subCategoryId = toOptionalString(req.body.subCategoryId);
+    if (hasValue(req.body.childCategoryId)) updateData.childCategoryId = toOptionalString(req.body.childCategoryId);
+    if (hasValue(req.body.brandId)) updateData.brandId = toOptionalString(req.body.brandId);
+    if (hasValue(req.body.seoTitle)) updateData.seoTitle = toOptionalString(req.body.seoTitle);
+    if (hasValue(req.body.seoDescription)) updateData.seoDescription = toOptionalString(req.body.seoDescription);
+    if (seoKeywords !== undefined) updateData.seoKeywords = seoKeywords;
+
+    if (existingImages !== undefined || uploadedImages.length > 0) {
+        updateData.images = [...(existingImages || []), ...uploadedImages];
+    }
+
+    if (requestedStatus) {
+        if (requestedStatus === ProductStatus.PENDING) {
+            const sellerProfile = await prisma.seller.findUnique({ where: { email: product.sellerEmail } });
+            const shouldAutoPublish = !!sellerProfile?.isApproved && !!sellerProfile?.autoApproveProducts;
+            updateData.status = shouldAutoPublish ? ProductStatus.PUBLISHED : ProductStatus.PENDING;
+            updateData.isPublished = shouldAutoPublish;
+
+            const result = await prisma.$transaction(async (tnx) => {
+                const updated = await tnx.product.update({
+                    where: { id },
+                    data: updateData,
+                    include: {
+                        category: true,
+                        seller: true
+                    }
+                });
+
+                if (shouldAutoPublish) {
+                    await tnx.productApproval.upsert({
+                        where: { productId: id },
+                        create: {
+                            productId: id,
+                            status: 'APPROVED',
+                            reviewedBy: 'system:auto-approve',
+                            reviewNote: 'Auto-approved: trusted seller',
+                            reviewedAt: new Date(),
+                            submittedAt: new Date(),
+                        },
+                        update: {
+                            status: 'APPROVED',
+                            reviewedBy: 'system:auto-approve',
+                            reviewNote: 'Auto-approved: trusted seller',
+                            reviewedAt: new Date(),
+                            submittedAt: new Date(),
+                        }
+                    });
+                    await tnx.productApprovalHistory.create({
+                        data: {
+                            productId: id,
+                            status: 'APPROVED',
+                            reviewedBy: 'system:auto-approve',
+                            reviewNote: 'Auto-approved: trusted seller',
+                        }
+                    });
+                } else {
+                    await tnx.productApproval.upsert({
+                        where: { productId: id },
+                        create: {
+                            productId: id,
+                            status: 'PENDING',
+                            submittedAt: new Date(),
+                        },
+                        update: {
+                            status: 'PENDING',
+                            reviewedBy: null,
+                            reviewNote: null,
+                            reviewedAt: null,
+                            submittedAt: new Date(),
+                        }
+                    });
+                }
+
+                return updated;
+            });
+
+            return result;
+        }
+
+        updateData.status = requestedStatus;
+        updateData.isPublished = requestedStatus === ProductStatus.PUBLISHED;
+    }
 
     const result = await prisma.product.update({
         where: { id },
-        data: req.body,
+        data: updateData,
         include: {
             category: true,
             seller: true
@@ -539,12 +684,13 @@ const getSellerProducts = async (sellerEmail: string, params: any, options: IOpt
 
 // ===================== VARIANTS =====================
 
-const createVariant = async (productId: string, user: IJWTPayload, payload: {
-    sku?: string; size?: string; color?: string; stock: number; price?: number;
-}) => {
+const createVariant = async (productId: string, user: IJWTPayload, payload: ProductVariantMutationPayload) => {
     const product = await prisma.product.findUniqueOrThrow({ where: { id: productId } });
     if (user.role !== "ADMIN" && product.sellerEmail !== user.email) {
         throw new ApiError(httpStatus.FORBIDDEN, "You can only add variants to your own products");
+    }
+    if (payload.stock === undefined) {
+        throw new ApiError(httpStatus.BAD_REQUEST, "Variant stock is required");
     }
     const sku = payload.sku || `VAR-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     return prisma.productVariant.create({
@@ -552,9 +698,7 @@ const createVariant = async (productId: string, user: IJWTPayload, payload: {
     });
 };
 
-const updateVariant = async (variantId: string, productId: string, user: IJWTPayload, payload: {
-    sku?: string; size?: string; color?: string; stock?: number; price?: number;
-}) => {
+const updateVariant = async (variantId: string, productId: string, user: IJWTPayload, payload: ProductVariantMutationPayload) => {
     const product = await prisma.product.findUniqueOrThrow({ where: { id: productId } });
     if (user.role !== "ADMIN" && product.sellerEmail !== user.email) {
         throw new ApiError(httpStatus.FORBIDDEN, "You can only update variants of your own products");

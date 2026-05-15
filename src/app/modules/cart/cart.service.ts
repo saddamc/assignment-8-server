@@ -86,6 +86,14 @@ const addToCart = async (user: IJWTPayload, payload: { productId: string; quanti
         }
     });
 
+    // Check cart limit: max 5 of same item per customer
+    const currentQuantity = existingItem ? existingItem.quantity : 0;
+    const newTotalQuantity = currentQuantity + quantity;
+
+    if (newTotalQuantity > 5) {
+        throw new ApiError(httpStatus.BAD_REQUEST, `You can only add up to 5 of this item to your cart. You currently have ${currentQuantity} in your cart.`);
+    }
+
     let result;
     if (existingItem) {
         // Update quantity
@@ -120,6 +128,11 @@ const updateCartItem = async (user: IJWTPayload, cartItemId: string, payload: { 
 
     if (cartItem.cartId !== cart.id) {
         throw new ApiError(httpStatus.FORBIDDEN, "This cart item does not belong to you!");
+    }
+
+    // Check cart limit: max 5 of same item per customer
+    if (payload.quantity > 5) {
+        throw new ApiError(httpStatus.BAD_REQUEST, "You can only have up to 5 of this item in your cart.");
     }
 
     // Check stock

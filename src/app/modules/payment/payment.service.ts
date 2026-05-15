@@ -69,7 +69,7 @@ const createCheckoutSession = async (user: IJWTPayload, payload: { orderId: stri
         throw new ApiError(httpStatus.BAD_REQUEST, "This order is already paid!");
     }
 
-    const clientBaseUrl = process.env.CLIENT_URL || "http://localhost:3000";
+    const clientBaseUrl = process.env.FRONTEND_URL || process.env.CLIENT_URL || "http://localhost:3000";
 
     const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = order.items.map((item) => ({
         price_data: {
@@ -132,12 +132,18 @@ const handleStripeWebhookEvent = async (event: Stripe.Event) => {
                             await tnx.cartItem.deleteMany({ where: { cartId: cart.id } });
                         }
                         // Mark paid + processing
+                        const paymentIntentId =
+                            typeof session.payment_intent === 'string'
+                                ? session.payment_intent
+                                : session.payment_intent?.id;
+
                         await tnx.order.update({
                             where: { id: orderId },
                             data: {
                                 paymentStatus: PaymentStatus.PAID,
                                 status: "PROCESSING",
-                                transactionId: session.payment_intent as string ?? undefined
+                                transactionId: paymentIntentId ?? undefined,
+                                stripeSessionId: session.id // Ensure session ID is stored
                             }
                         });
                     });
@@ -215,9 +221,118 @@ const getPaymentsByOrder = async (orderId: string, user: IJWTPayload) => {
     };
 };
 
+const completePaymentManually = async (orderId: string) => {
+    console.log("🔄 Manually completing payment for order:", orderId);
+
+    const order = await prisma.order.findUnique({
+        where: { id: orderId },
+        include: { items: true }
+    });
+
+    if (!order) {
+        throw new ApiError(httpStatus.NOT_FOUND, "Order not found!");
+    }
+
+    if (order.paymentStatus === PaymentStatus.PAID) {
+        throw new ApiError(httpStatus.BAD_REQUEST, "Order is already paid!");
+    }
+
+    // Manually complete the payment (simulate webhook logic)
+    await prisma.$transaction(async (tnx) => {
+        // Decrement stock
+        for (const item of order.items) {
+            await tnx.product.update({
+                where: { id: item.productId },
+                data: { stock: { decrement: item.quantity } }
+            });
+        }
+
+        // Clear customer's DB cart
+        const cart = await tnx.cart.findUnique({ where: { customerEmail: order.customerEmail } });
+        if (cart) {
+            await tnx.cartItem.deleteMany({ where: { cartId: cart.id } });
+        }
+
+        // Mark paid + processing
+        await tnx.order.update({
+            where: { id: orderId },
+            data: {
+                paymentStatus: PaymentStatus.PAID,
+                status: "PROCESSING",
+                transactionId: `manual_${Date.now()}`, // Mock transaction ID
+                stripeSessionId: order.stripeSessionId || `manual_session_${Date.now()}`
+            }
+        });
+    });
+
+    console.log("✅ Payment completed manually for order:", orderId);
+    return { orderId, status: "PAID" };
+};
+
 export const PaymentService = {
     createPaymentIntent,
     createCheckoutSession,
     handleStripeWebhookEvent,
-    getPaymentsByOrder
+    getPaymentsByOrder,
+    completePaymentManually,
+    verifyStripeSession,
+}
+
+// ---- verifyStripeSession ----
+async function verifyStripeSession(sessionId: string, user: IJWTPayload) {
+    // Retrieve session from Stripe
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+    if (session.payment_status !== "paid") {
+        return { paid: false };
+    }
+
+    // Find the order associated with this session
+    const order = await prisma.order.findFirst({
+        where: { stripeSessionId: sessionId },
+        include: { items: true }
+    });
+
+    if (!order) {
+        return { paid: true, message: "Session paid but order not found" };
+    }
+
+    // Auth check: only the order owner or admin
+    if (user.role !== "ADMIN" && order.customerEmail !== user.email) {
+        throw new ApiError(httpStatus.FORBIDDEN, "Unauthorized");
+    }
+
+    if (order.paymentStatus === PaymentStatus.PAID) {
+        return { paid: true, orderId: order.id, alreadyProcessed: true };
+    }
+
+    // Decrement stock and mark paid (same logic as webhook)
+    await prisma.$transaction(async (tx) => {
+        for (const item of order.items) {
+            await tx.product.update({
+                where: { id: item.productId },
+                data: { stock: { decrement: item.quantity } }
+            });
+        }
+
+        // Clear customer's cart
+        const cart = await tx.cart.findUnique({ where: { customerEmail: order.customerEmail } });
+        if (cart) await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
+
+        const paymentIntentId =
+            typeof session.payment_intent === 'string'
+                ? session.payment_intent
+                : session.payment_intent?.id;
+
+        await tx.order.update({
+            where: { id: order.id },
+            data: {
+                paymentStatus: PaymentStatus.PAID,
+                status: "PROCESSING",
+                transactionId: paymentIntentId ?? undefined,
+            }
+        });
+    });
+
+    return { paid: true, orderId: order.id, alreadyProcessed: false };
 }

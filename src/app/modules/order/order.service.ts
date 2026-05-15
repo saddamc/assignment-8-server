@@ -31,6 +31,33 @@ const createOrder = async (user: IJWTPayload, payload: ICreateOrderPayload) => {
         throw new ApiError(httpStatus.BAD_REQUEST, "Cart is empty!");
     }
 
+    // Get address details if addressId is provided
+    let addressDetails = null;
+    let finalShippingAddress = shippingAddress;
+    let finalContactNumber = contactNumber;
+
+    console.log('Order creation - addressId:', addressId, 'shippingAddress:', shippingAddress, 'contactNumber:', contactNumber);
+
+    if (addressId) {
+        addressDetails = await prisma.address.findUnique({
+            where: { id: addressId, customerEmail: user.email }
+        });
+
+        console.log('Address lookup result:', addressDetails);
+
+        if (!addressDetails) {
+            throw new ApiError(httpStatus.BAD_REQUEST, "Invalid address selected!");
+        }
+
+        // Format shipping address from address details
+        finalShippingAddress = `${addressDetails.fullName}, ${addressDetails.line1}${addressDetails.line2 ? ', ' + addressDetails.line2 : ''}, ${addressDetails.city}, ${addressDetails.state} ${addressDetails.postalCode}, ${addressDetails.country}`;
+
+        // Use phone from address if not provided separately
+        finalContactNumber = contactNumber || addressDetails.phone;
+
+        console.log('Final shipping address:', finalShippingAddress, 'Final contact number:', finalContactNumber);
+    }
+
     // Calculate total and validate stock (soft-check only — stock reserved on payment)
     let totalAmount = 0;
     for (const item of cart.items) {
@@ -70,10 +97,10 @@ const createOrder = async (user: IJWTPayload, payload: ICreateOrderPayload) => {
                 totalAmount: finalTotal,
                 discountAmount,
                 couponCode: couponCode ?? null,
-                shippingAddress: shippingAddress ?? null,
+                shippingAddress: finalShippingAddress ?? null,
                 addressId: addressId ?? null,
-                contactNumber: contactNumber ?? null,
-                paymentMethod,
+                contactNumber: finalContactNumber ?? null,
+                paymentMethod: paymentMethod.toUpperCase(), // Ensure consistent casing
                 notes: notes ?? null,
                 // COD orders go straight to PENDING; online orders await payment
                 status: paymentMethod === "COD" ? "PENDING" : "PENDING",
@@ -113,6 +140,44 @@ const createOrder = async (user: IJWTPayload, payload: ICreateOrderPayload) => {
             }
         }
     });
+
+    // Notify sellers about new order
+    try {
+        const sellerNotifications = new Map<string, { products: string[], total: number }>();
+
+        // Group order items by seller
+        for (const item of cart.items) {
+            const sellerEmail = item.product.sellerEmail;
+            if (!sellerNotifications.has(sellerEmail)) {
+                sellerNotifications.set(sellerEmail, { products: [], total: 0 });
+            }
+            const sellerData = sellerNotifications.get(sellerEmail)!;
+            sellerData.products.push(`${item.product.name} (x${item.quantity})`);
+            sellerData.total += (item.product.price * (1 - item.product.discount / 100)) * item.quantity;
+        }
+
+        // Create notifications for each seller
+        for (const [sellerEmail, data] of sellerNotifications) {
+            await prisma.notification.create({
+                data: {
+                    customerEmail: sellerEmail, // Sellers receive notifications as "customers" in this system
+                    type: "ORDER_PLACED",
+                    title: "New Order Received",
+                    message: `You have received a new order #${result.id.slice(-8).toUpperCase()} for: ${data.products.join(", ")}. Total: $${data.total.toFixed(2)}`,
+                    metadata: {
+                        orderId: result.id,
+                        products: data.products,
+                        totalAmount: data.total
+                    }
+                }
+            });
+        }
+
+        console.log(`📢 Notified ${sellerNotifications.size} seller(s) about new order ${result.id}`);
+    } catch (error) {
+        console.error("Failed to notify sellers:", error);
+        // Don't fail the order creation if notifications fail
+    }
 
     return fullOrder;
 };
@@ -235,7 +300,7 @@ const getAllOrders = async (options: IOptions, filters?: any) => {
 };
 
 const updateOrderStatus = async (id: string, payload: { status: OrderStatus }) => {
-    await prisma.order.findUniqueOrThrow({
+    const order = await prisma.order.findUniqueOrThrow({
         where: { id }
     });
 
@@ -263,9 +328,15 @@ const updateOrderStatus = async (id: string, payload: { status: OrderStatus }) =
             });
         });
     } else {
+        // For COD orders, mark as paid when delivered
+        const updateData: any = { ...payload };
+        if (payload.status === OrderStatus.DELIVERED && order.paymentMethod === "COD") {
+            updateData.paymentStatus = "PAID";
+        }
+
         await prisma.order.update({
             where: { id },
-            data: payload
+            data: updateData
         });
     }
 

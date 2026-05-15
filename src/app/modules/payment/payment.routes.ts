@@ -19,7 +19,21 @@ router.post(
     PaymentController.createCheckoutSession
 );
 
+// Manually complete payment for development/testing
+router.post(
+    '/complete-payment/:orderId',
+    auth(UserRole.ADMIN), // Only admin can manually complete payments
+    PaymentController.completePaymentManually
+);
+
 // Get payment details for an order
+// Verify Stripe checkout session and mark order as paid (called from success page)
+router.post(
+    '/verify-session/:sessionId',
+    auth(UserRole.CUSTOMER, UserRole.ADMIN),
+    PaymentController.verifyStripeSession
+);
+
 router.get(
     '/:orderId',
     auth(UserRole.CUSTOMER, UserRole.ADMIN),

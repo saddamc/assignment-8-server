@@ -20,18 +20,30 @@ const createPaymentIntent = catchAsync(async (req: Request, res: Response) => {
 });
 
 const handleStripeWebhookEvent = catchAsync(async (req: Request, res: Response) => {
+    console.log("🔄 Webhook received:", req.body?.type, req.body?.data?.object?.id);
+
+    // For development, allow unsigned webhooks if secret is not set
     const sig = req.headers["stripe-signature"] as string;
     const webhookSecret = config.stripe.webhook_secret as string;
 
     let event;
-    try {
-        event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
-    } catch (err: any) {
-        console.error("⚠️ Webhook signature verification failed:", err.message);
-        return res.status(400).send(`Webhook Error: ${err.message}`);
+    if (webhookSecret) {
+        // Production: verify signature
+        try {
+            event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+        } catch (err: any) {
+            console.error("⚠️ Webhook signature verification failed:", err.message);
+            return res.status(400).send(`Webhook Error: ${err.message}`);
+        }
+    } else {
+        // Development: accept webhook without signature verification
+        console.log("⚠️ DEVELOPMENT MODE: Accepting webhook without signature verification");
+        event = req.body;
     }
 
     const result = await PaymentService.handleStripeWebhookEvent(event);
+
+    console.log("✅ Webhook processed successfully for event:", event.type);
 
     sendResponse(res, {
         statusCode: 200,
@@ -66,9 +78,36 @@ const getPaymentsByOrder = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
+const completePaymentManually = catchAsync(async (req: Request, res: Response) => {
+    const orderId = getParamAsString(req.params.orderId, "orderId");
+    const result = await PaymentService.completePaymentManually(orderId);
+
+    sendResponse(res, {
+        statusCode: httpStatus.OK,
+        success: true,
+        message: "Payment completed manually!",
+        data: result
+    });
+});
+
+const verifyStripeSession = catchAsync(async (req: Request, res: Response) => {
+    const user = req.user!;
+    const sessionId = getParamAsString(req.params.sessionId, "sessionId");
+    const result = await PaymentService.verifyStripeSession(sessionId, user);
+
+    sendResponse(res, {
+        statusCode: httpStatus.OK,
+        success: true,
+        message: "Session verified!",
+        data: result
+    });
+});
+
 export const PaymentController = {
     createPaymentIntent,
     createCheckoutSession,
     handleStripeWebhookEvent,
-    getPaymentsByOrder
+    getPaymentsByOrder,
+    completePaymentManually,
+    verifyStripeSession,
 }

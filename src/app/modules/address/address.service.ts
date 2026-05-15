@@ -57,8 +57,23 @@ const createAddress = async (user: IJWTPayload, payload: {
     const count = await prisma.address.count({ where: { customerEmail: user.email } });
     if (count === 0) payload.isDefault = true;
 
+    // Explicitly pick only valid fields to avoid unknown Prisma fields
+    const { label, fullName, phone, line1, line2, city, state, postalCode, country, isDefault } = payload;
+
     const created = await prisma.address.create({
-        data: { ...payload, customerEmail: user.email }
+        data: {
+            label: label ?? 'Home',
+            fullName,
+            phone,
+            line1,
+            line2,
+            city,
+            state,
+            postalCode,
+            country: country ?? 'US',
+            isDefault: isDefault ?? false,
+            customerEmail: user.email,
+        }
     });
 
     if (created.isDefault) {
@@ -83,7 +98,21 @@ const updateAddress = async (user: IJWTPayload, id: string, payload: Partial<{
         });
     }
 
-    const updated = await prisma.address.update({ where: { id }, data: payload });
+    const updated = await prisma.address.update({
+        where: { id },
+        data: {
+            ...(payload.label !== undefined && { label: payload.label }),
+            ...(payload.fullName !== undefined && { fullName: payload.fullName }),
+            ...(payload.phone !== undefined && { phone: payload.phone }),
+            ...(payload.line1 !== undefined && { line1: payload.line1 }),
+            ...(payload.line2 !== undefined && { line2: payload.line2 }),
+            ...(payload.city !== undefined && { city: payload.city }),
+            ...(payload.state !== undefined && { state: payload.state }),
+            ...(payload.postalCode !== undefined && { postalCode: payload.postalCode }),
+            ...(payload.country !== undefined && { country: payload.country }),
+            ...(payload.isDefault !== undefined && { isDefault: payload.isDefault }),
+        }
+    });
     const shouldSync = payload.isDefault || address.isDefault;
     if (shouldSync) {
         await syncCustomerDeliveryInfo(user.email, updated);
