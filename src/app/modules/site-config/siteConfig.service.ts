@@ -30,6 +30,12 @@ const seedDefaults = async (adminEmail: string) => {
         { key: 'default_commission_rate', value: '10', type: 'number' },
         { key: 'maintenance_mode', value: 'false', type: 'boolean' },
         { key: 'free_shipping_threshold', value: '50', type: 'number' },
+        { key: 'shipping_default_charge', value: '100', type: 'number' },
+        {
+            key: 'shipping_rules',
+            value: '[{"state":"Dhaka","charge":60,"priority":100},{"charge":100,"priority":0}]',
+            type: 'json'
+        },
         { key: 'contact_email', value: 'support@shophub.com', type: 'string' },
     ];
     for (const d of defaults) {

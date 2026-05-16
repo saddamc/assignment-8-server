@@ -101,19 +101,35 @@ const getDashboardStats = async () => {
 };
 
 const getSellerStats = async (sellerEmail: string) => {
-    const [products, orders, totalRevenue] = await Promise.all([
+    const [products, orders, paidOrderItems, pendingOrders] = await Promise.all([
         prisma.product.count({ where: { sellerEmail, isDeleted: false } }),
-        prisma.orderItem.count({
-            where: { product: { sellerEmail } }
+        prisma.order.count({
+            where: { 
+                items: { some: { product: { sellerEmail } } },
+                OR: [{ paymentMethod: "COD" }, { paymentStatus: "PAID" }]
+            }
         }),
-        prisma.orderItem.aggregate({
-            _sum: { price: true },
+        prisma.orderItem.findMany({
             where: { product: { sellerEmail }, order: { paymentStatus: PaymentStatus.PAID } }
+            ,
+            select: { price: true, quantity: true }
+        }),
+        prisma.order.count({
+            where: { 
+                status: "PENDING",
+                items: { some: { product: { sellerEmail } } },
+                OR: [{ paymentMethod: "COD" }, { paymentStatus: "PAID" }]
+            }
         })
     ]);
 
+    const totalRevenue = paidOrderItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
     const recentOrders = await prisma.orderItem.findMany({
-        where: { product: { sellerEmail } },
+        where: { 
+            product: { sellerEmail },
+            order: { OR: [{ paymentMethod: "COD" }, { paymentStatus: "PAID" }] }
+        },
         take: 10,
         orderBy: { createdAt: "desc" },
         include: {
@@ -136,7 +152,8 @@ const getSellerStats = async (sellerEmail: string) => {
         overview: {
             totalProducts: products,
             totalOrders: orders,
-            totalRevenue: totalRevenue._sum.price || 0
+            totalRevenue,
+            pendingOrders
         },
         recentOrders,
         myProducts

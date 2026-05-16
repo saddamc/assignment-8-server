@@ -16,6 +16,7 @@ import { bannerRoutes } from '../modules/banner/banner.routes';
 import { siteConfigRoutes } from '../modules/site-config/siteConfig.routes';
 import { productApprovalRoutes } from '../modules/product-approval/productApproval.routes';
 import { adminRoutes } from '../modules/admin/admin.routes';
+import { SellerShippingRoutes } from '../modules/seller-shipping/sellerShipping.routes';
 
 
 const router = express.Router();
@@ -38,6 +39,7 @@ const moduleRoutes = [
     { path: '/config', route: siteConfigRoutes },
     { path: '/product-approval', route: productApprovalRoutes },
     { path: '/admin', route: adminRoutes },
+    { path: '/seller-shipping', route: SellerShippingRoutes },
 ];
 
 moduleRoutes.forEach(route => router.use(route.path, route.route))

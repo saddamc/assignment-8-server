@@ -14,6 +14,204 @@ interface ICreateOrderPayload {
     notes?: string;
 }
 
+interface IShippingRule {
+    country?: string;
+    state?: string;
+    city?: string;
+    postalCode?: string;
+    line1Contains?: string;
+    charge: number;
+    priority?: number;
+    isActive?: boolean;
+}
+
+interface IShippingLocation {
+    shippingAddress?: string | null;
+    country?: string | null;
+    state?: string | null;
+    city?: string | null;
+    postalCode?: string | null;
+    line1?: string | null;
+}
+
+const normalize = (value?: string | null) => String(value || '').trim().toLowerCase();
+
+const toNumber = (value: unknown, fallback = 0) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+};
+
+const matchesExact = (actual?: string | null, expected?: string | null) => {
+    if (!expected) return true;
+    return normalize(actual) === normalize(expected);
+};
+
+const matchesContains = (actual?: string | null, expected?: string | null) => {
+    if (!expected) return true;
+    return normalize(actual).includes(normalize(expected));
+};
+
+const resolveShippingCharge = async (location: IShippingLocation) => {
+    const configRows = await prisma.siteConfig.findMany({
+        where: { key: { in: ['shipping_default_charge', 'shipping_rules'] } }
+    });
+
+    const defaultCharge = toNumber(configRows.find((c) => c.key === 'shipping_default_charge')?.value, 100);
+    const rulesRaw = configRows.find((c) => c.key === 'shipping_rules')?.value;
+
+    let rules: IShippingRule[] = [];
+    if (rulesRaw) {
+        try {
+            const parsed = JSON.parse(rulesRaw);
+            if (Array.isArray(parsed)) {
+                rules = parsed.filter((r) => typeof r === 'object' && r && Number.isFinite(Number(r.charge))) as IShippingRule[];
+            }
+        } catch {
+            rules = [];
+        }
+    }
+
+    if (rules.length === 0) {
+        rules = [{ state: 'Dhaka', charge: 60, priority: 100 }, { charge: defaultCharge, priority: 0 }];
+    }
+
+    const orderedRules = [...rules]
+        .filter((r) => r.isActive !== false)
+        .sort((a, b) => toNumber(b.priority, 0) - toNumber(a.priority, 0));
+
+    const shippingAddress = normalize(location.shippingAddress);
+    const line1 = normalize(location.line1);
+
+    for (const rule of orderedRules) {
+        const exactMatch =
+            matchesExact(location.country, rule.country) &&
+            matchesExact(location.state, rule.state) &&
+            matchesExact(location.city, rule.city) &&
+            matchesExact(location.postalCode, rule.postalCode);
+
+        if (!exactMatch) continue;
+
+        if (rule.line1Contains) {
+            const token = normalize(rule.line1Contains);
+            if (!line1.includes(token) && !shippingAddress.includes(token)) {
+                continue;
+            }
+        }
+
+        return toNumber(rule.charge, defaultCharge);
+    }
+
+    const dhakaFallback = matchesContains(location.state, 'dhaka') || matchesContains(location.city, 'dhaka');
+    if (dhakaFallback) return 60;
+
+    return defaultCharge;
+};
+
+// ─── Resolve shipping for a set of cart items (product/seller rules first) ───
+// Priority: product.shippingCost > seller category rule > seller default > global location
+const resolveCartShipping = async (
+    cartItems: { product: { shippingCost: number | null; sellerEmail: string; categoryId: string | null }; quantity: number }[],
+    location: IShippingLocation
+): Promise<number> => {
+    // Collect per-item seller-defined shipping (if any)
+    const sellerEmails = [...new Set(cartItems.map((i) => i.product.sellerEmail))];
+    const categoryIds = [...new Set(cartItems.map((i) => i.product.categoryId).filter(Boolean))] as string[];
+
+    // Load all relevant seller category shipping rules in one query
+    const sellerRules = await prisma.sellerCategoryShipping.findMany({
+        where: {
+            sellerEmail: { in: sellerEmails },
+            OR: [
+                { categoryId: { in: categoryIds } },
+                { categoryId: null }, // seller-wide default
+            ],
+        },
+    });
+
+    let totalShipping = 0;
+    const globalLocationCharge = await resolveShippingCharge(location);
+
+    // Group items by seller so shipping is charged once per seller
+    const itemsBySeller = cartItems.reduce<Record<string, typeof cartItems>>((acc, item) => {
+        const seller = item.product.sellerEmail;
+        if (!acc[seller]) acc[seller] = [];
+        acc[seller].push(item);
+        return acc;
+    }, {});
+
+    for (const sellerEmail of Object.keys(itemsBySeller)) {
+        const sellerItems = itemsBySeller[sellerEmail];
+        let sellerCharge: number | null = null;
+
+        // 1. Use the highest product-level shipping override for this seller
+        const productOverrides = sellerItems
+            .map((item) => item.product.shippingCost)
+            .filter((cost): cost is number => cost != null && cost >= 0);
+        if (productOverrides.length > 0) {
+            sellerCharge = Math.max(...productOverrides);
+        }
+
+        if (sellerCharge === null) {
+            // 2. Find the highest matching category shipping rule for this seller
+            const categoryCharges = sellerItems
+                .map((item) => {
+                    const catRule = sellerRules.find(
+                        (r) => r.sellerEmail === sellerEmail && r.categoryId === item.product.categoryId
+                    );
+                    return catRule?.charge ?? null;
+                })
+                .filter((charge): charge is number => charge != null);
+
+            if (categoryCharges.length > 0) {
+                sellerCharge = Math.max(...categoryCharges);
+            }
+        }
+
+        if (sellerCharge === null) {
+            // 3. Use seller-wide default rule if available
+            const sellerDefault = sellerRules.find(
+                (r) => r.sellerEmail === sellerEmail && r.categoryId === null
+            );
+            if (sellerDefault) {
+                sellerCharge = sellerDefault.charge;
+            }
+        }
+
+        if (sellerCharge === null) {
+            // 4. Fallback to global location charge for this seller
+            sellerCharge = globalLocationCharge;
+        }
+
+        totalShipping += sellerCharge;
+    }
+
+    return totalShipping;
+};
+
+const getFinalProductPrice = (product: {
+    price: number;
+    discount: number;
+    discountPrice?: number | null;
+}, variant?: { price?: number | null }) => {
+    if (typeof variant?.price === "number" && variant.price > 0) {
+        return variant.price;
+    }
+
+    if (
+        typeof product.discountPrice === "number" &&
+        product.discountPrice > 0 &&
+        product.discountPrice < product.price
+    ) {
+        return product.discountPrice;
+    }
+
+    if (typeof product.discount === "number" && product.discount > 0) {
+        return product.price * (1 - product.discount / 100);
+    }
+
+    return product.price;
+};
+
 const createOrder = async (user: IJWTPayload, payload: ICreateOrderPayload) => {
     const { shippingAddress, addressId, contactNumber, couponCode, paymentMethod = "STRIPE", notes } = payload;
 
@@ -22,7 +220,7 @@ const createOrder = async (user: IJWTPayload, payload: ICreateOrderPayload) => {
         where: { customerEmail: user.email },
         include: {
             items: {
-                include: { product: true }
+                include: { product: true, variant: true }
             }
         }
     });
@@ -67,8 +265,8 @@ const createOrder = async (user: IJWTPayload, payload: ICreateOrderPayload) => {
                 `Insufficient stock for "${item.product.name}". Available: ${item.product.stock}`
             );
         }
-        const discountedPrice = item.product.price * (1 - item.product.discount / 100);
-        totalAmount += discountedPrice * item.quantity;
+        const unitPrice = getFinalProductPrice(item.product, item.variant || undefined);
+        totalAmount += unitPrice * item.quantity;
     }
 
     // Apply coupon if provided
@@ -87,40 +285,67 @@ const createOrder = async (user: IJWTPayload, payload: ICreateOrderPayload) => {
         }
     }
 
-    const finalTotal = totalAmount - discountAmount;
+    const shippingAmount = await resolveCartShipping(cart.items, {
+        shippingAddress: finalShippingAddress,
+        country: addressDetails?.country,
+        state: addressDetails?.state,
+        city: addressDetails?.city,
+        postalCode: addressDetails?.postalCode,
+        line1: addressDetails?.line1
+    });
 
-    // Create order in a transaction (NO stock decrement here — deducted after payment)
+    const finalTotal = totalAmount - discountAmount + shippingAmount;
+
+    // Create order in a transaction
     const result = await prisma.$transaction(async (tnx) => {
         const order = await tnx.order.create({
             data: {
                 customerEmail: user.email,
                 totalAmount: finalTotal,
                 discountAmount,
+                shippingAmount,
                 couponCode: couponCode ?? null,
                 shippingAddress: finalShippingAddress ?? null,
                 addressId: addressId ?? null,
                 contactNumber: finalContactNumber ?? null,
-                paymentMethod: paymentMethod.toUpperCase(), // Ensure consistent casing
+                paymentMethod: paymentMethod.toUpperCase(),
                 notes: notes ?? null,
-                // COD orders go straight to PENDING; online orders await payment
                 status: paymentMethod === "COD" ? "PENDING" : "PENDING",
                 paymentStatus: paymentMethod === "COD" ? "UNPAID" : "UNPAID"
             }
         });
 
         for (const item of cart.items) {
-            const discountedPrice = item.product.price * (1 - item.product.discount / 100);
+            const unitPrice = getFinalProductPrice(item.product, item.variant || undefined);
+            
+            // 🚨 DECREMENT STOCK FOR COD ORDERS IMMEDIATELY
+            if (paymentMethod === "COD") {
+                if (item.variantId) {
+                    await tnx.productVariant.update({
+                        where: { id: item.variantId },
+                        data: { stock: { decrement: item.quantity } }
+                    });
+                } else {
+                    await tnx.product.update({
+                        where: { id: item.productId },
+                        data: { stock: { decrement: item.quantity } }
+                    });
+                }
+            }
+
             await tnx.orderItem.create({
                 data: {
                     orderId: order.id,
                     productId: item.productId,
+                    variantId: item.variantId,
+                    size: item.size || "",
                     quantity: item.quantity,
-                    price: discountedPrice
+                    price: unitPrice
                 }
             });
         }
 
-        // For COD orders, clear the cart now; for online payment, cart is cleared in webhook
+        // For COD orders, clear the cart now
         if (paymentMethod === "COD") {
             await tnx.cartItem.deleteMany({ where: { cartId: cart.id } });
         }
@@ -141,45 +366,119 @@ const createOrder = async (user: IJWTPayload, payload: ICreateOrderPayload) => {
         }
     });
 
-    // Notify sellers about new order
-    try {
-        const sellerNotifications = new Map<string, { products: string[], total: number }>();
+    // Notify sellers ONLY if it's COD. Online payments notify via webhook.
+    if (paymentMethod === "COD") {
+        try {
+            const sellerNotifications = new Map<string, { products: string[], total: number }>();
 
-        // Group order items by seller
-        for (const item of cart.items) {
-            const sellerEmail = item.product.sellerEmail;
-            if (!sellerNotifications.has(sellerEmail)) {
-                sellerNotifications.set(sellerEmail, { products: [], total: 0 });
-            }
-            const sellerData = sellerNotifications.get(sellerEmail)!;
-            sellerData.products.push(`${item.product.name} (x${item.quantity})`);
-            sellerData.total += (item.product.price * (1 - item.product.discount / 100)) * item.quantity;
-        }
-
-        // Create notifications for each seller
-        for (const [sellerEmail, data] of sellerNotifications) {
-            await prisma.notification.create({
-                data: {
-                    customerEmail: sellerEmail, // Sellers receive notifications as "customers" in this system
-                    type: "ORDER_PLACED",
-                    title: "New Order Received",
-                    message: `You have received a new order #${result.id.slice(-8).toUpperCase()} for: ${data.products.join(", ")}. Total: $${data.total.toFixed(2)}`,
-                    metadata: {
-                        orderId: result.id,
-                        products: data.products,
-                        totalAmount: data.total
-                    }
+            // Group order items by seller
+            for (const item of cart.items) {
+                const sellerEmail = item.product.sellerEmail;
+                if (!sellerNotifications.has(sellerEmail)) {
+                    sellerNotifications.set(sellerEmail, { products: [], total: 0 });
                 }
-            });
-        }
+                const sellerData = sellerNotifications.get(sellerEmail)!;
+                sellerData.products.push(`${item.product.name} (x${item.quantity})`);
+                sellerData.total += getFinalProductPrice(item.product, item.variant || undefined) * item.quantity;
+            }
 
-        console.log(`📢 Notified ${sellerNotifications.size} seller(s) about new order ${result.id}`);
-    } catch (error) {
-        console.error("Failed to notify sellers:", error);
-        // Don't fail the order creation if notifications fail
+            // Create notifications for each seller
+            for (const [sellerEmail, data] of sellerNotifications) {
+                await prisma.notification.create({
+                    data: {
+                        customerEmail: sellerEmail, // Sellers receive notifications as "customers" in this system
+                        type: "ORDER_PLACED",
+                        title: "New Order Received",
+                        message: `You have received a new order #${result.id.slice(-8).toUpperCase()} for: ${data.products.join(", ")}. Total: $${data.total.toFixed(2)}`,
+                        metadata: {
+                            orderId: result.id,
+                            products: data.products,
+                            totalAmount: data.total
+                        }
+                    }
+                });
+            }
+
+            console.log(`📢 Notified ${sellerNotifications.size} seller(s) about new COD order ${result.id}`);
+        } catch (error) {
+            console.error("Failed to notify sellers:", error);
+            // Don't fail the order creation if notifications fail
+        }
     }
 
     return fullOrder;
+};
+
+const getShippingQuote = async (user: IJWTPayload, query: {
+    addressId?: string;
+    country?: string;
+    state?: string;
+    city?: string;
+    postalCode?: string;
+    line1?: string;
+    shippingAddress?: string;
+}) => {
+    let addressDetails: {
+        country?: string | null;
+        state?: string | null;
+        city?: string | null;
+        postalCode?: string | null;
+        line1?: string | null;
+        line2?: string | null;
+        fullName?: string | null;
+    } | null = null;
+
+    if (query.addressId) {
+        addressDetails = await prisma.address.findUnique({
+            where: { id: query.addressId, customerEmail: user.email },
+            select: {
+                country: true,
+                state: true,
+                city: true,
+                postalCode: true,
+                line1: true,
+                line2: true,
+                fullName: true
+            }
+        });
+
+        if (!addressDetails) {
+            throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid address selected');
+        }
+    }
+
+    const shippingAddress = query.shippingAddress || (addressDetails
+        ? `${addressDetails.fullName || ''}, ${addressDetails.line1 || ''}${addressDetails.line2 ? `, ${addressDetails.line2}` : ''}, ${addressDetails.city || ''}, ${addressDetails.state || ''} ${addressDetails.postalCode || ''}, ${addressDetails.country || ''}`
+        : undefined);
+
+    // Also check the customer's cart products for seller-level shipping overrides
+    const cart = await prisma.cart.findUnique({
+        where: { customerEmail: user.email },
+        include: { items: { include: { product: { select: { shippingCost: true, sellerEmail: true, categoryId: true } } } } },
+    });
+
+    const location: IShippingLocation = {
+        shippingAddress,
+        country: query.country ?? addressDetails?.country,
+        state: query.state ?? addressDetails?.state,
+        city: query.city ?? addressDetails?.city,
+        postalCode: query.postalCode ?? addressDetails?.postalCode,
+        line1: query.line1 ?? addressDetails?.line1,
+    };
+
+    const shippingAmount = cart && cart.items.length > 0
+        ? await resolveCartShipping(cart.items, location)
+        : await resolveShippingCharge(location);
+
+    return {
+        shippingAmount,
+        location: {
+            country: query.country ?? addressDetails?.country ?? null,
+            state: query.state ?? addressDetails?.state ?? null,
+            city: query.city ?? addressDetails?.city ?? null,
+            postalCode: query.postalCode ?? addressDetails?.postalCode ?? null
+        }
+    };
 };
 
 const getMyOrders = async (user: IJWTPayload, options: IOptions) => {
@@ -439,7 +738,10 @@ const getSellerOrders = async (user: IJWTPayload, options: IOptions) => {
     const { page, limit, skip, sortBy, sortOrder } = paginationHelper.calculatePagination(options);
     const [data, total] = await prisma.$transaction([
         prisma.order.findMany({
-            where: { items: { some: { product: { sellerEmail: user.email } } } },
+            where: { 
+                items: { some: { product: { sellerEmail: user.email } } },
+                OR: [{ paymentMethod: "COD" }, { paymentStatus: "PAID" }]
+            },
             include: {
                 items: { where: { product: { sellerEmail: user.email } }, include: { product: { select: { name: true, images: true, sellerEmail: true } } } },
                 customer: { select: { name: true, email: true } },
@@ -447,13 +749,19 @@ const getSellerOrders = async (user: IJWTPayload, options: IOptions) => {
             },
             skip, take: limit, orderBy: { [sortBy]: sortOrder }
         }),
-        prisma.order.count({ where: { items: { some: { product: { sellerEmail: user.email } } } } })
+        prisma.order.count({ 
+            where: { 
+                items: { some: { product: { sellerEmail: user.email } } },
+                OR: [{ paymentMethod: "COD" }, { paymentStatus: "PAID" }]
+            } 
+        })
     ]);
     return { meta: { page, limit, total }, data };
 };
 
 export const OrderService = {
     createOrder,
+    getShippingQuote,
     getMyOrders,
     getOrderById,
     getAllOrders,

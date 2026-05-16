@@ -18,6 +18,26 @@ const createOrder = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
+const getShippingQuote = catchAsync(async (req: Request, res: Response) => {
+    const user = req.user!;
+    const result = await OrderService.getShippingQuote(user, {
+        addressId: typeof req.query.addressId === 'string' ? req.query.addressId : undefined,
+        country: typeof req.query.country === 'string' ? req.query.country : undefined,
+        state: typeof req.query.state === 'string' ? req.query.state : undefined,
+        city: typeof req.query.city === 'string' ? req.query.city : undefined,
+        postalCode: typeof req.query.postalCode === 'string' ? req.query.postalCode : undefined,
+        line1: typeof req.query.line1 === 'string' ? req.query.line1 : undefined,
+        shippingAddress: typeof req.query.shippingAddress === 'string' ? req.query.shippingAddress : undefined,
+    });
+
+    sendResponse(res, {
+        statusCode: httpStatus.OK,
+        success: true,
+        message: 'Shipping quote retrieved successfully!',
+        data: result
+    });
+});
+
 const getMyOrders = catchAsync(async (req: Request, res: Response) => {
     const user = req.user!;
     const options = pick(req.query, ["page", "limit", "sortBy", "sortOrder"]);
@@ -92,6 +112,7 @@ const addShipment = catchAsync(async (req: Request, res: Response) => {
 
 export const OrderController = {
     createOrder,
+    getShippingQuote,
     getMyOrders,
     getOrderById,
     getAllOrders,

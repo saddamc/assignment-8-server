@@ -12,6 +12,7 @@ model Category {
   products      Product[]  @relation("ProductMainCategory")
   childProducts Product[]  @relation("ProductChildCategory")
   subProducts   Product[]  @relation("ProductSubCategory")
+  sellerShippingRules SellerCategoryShipping[] @relation("CategorySellerShipping")
 
   @@index([slug])
   @@index([parentId])
@@ -54,7 +55,7 @@ model Product {
   seoTitle         String?
   shortDescription String?
   sku              String?          @unique
-  slug             String?          @unique
+  slug             String           @unique
   status           ProductStatus    @default(DRAFT)
   subCategoryId    String?
   cartItems        CartItem[]
@@ -77,9 +78,28 @@ model Product {
   @@index([childCategoryId])
   @@index([brandId])
   @@index([sellerEmail])
+  shippingCost     Float?
+
   @@index([price])
   @@index([status])
   @@map("products")
+}
+
+model SellerCategoryShipping {
+  id          String    @id @default(uuid())
+  sellerEmail String
+  categoryId  String?   // null = seller-wide default for all categories
+  charge      Float
+  label       String?   // optional label, e.g. "Standard", "Express"
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  seller      Seller    @relation(fields: [sellerEmail], references: [email])
+  category    Category? @relation("CategorySellerShipping", fields: [categoryId], references: [id])
+
+  @@unique([sellerEmail, categoryId])
+  @@index([sellerEmail])
+  @@index([categoryId])
+  @@map("seller_category_shippings")
 }
 
 model Review {
@@ -111,6 +131,8 @@ model ProductVariant {
   images    String[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  cartItems CartItem[]
+  orderItems OrderItem[]
   product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@index([productId])

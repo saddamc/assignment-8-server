@@ -9,9 +9,10 @@ const validateRequest = (schema: ZodTypeAny) => async (req: Request, res: Respon
             params: req.params,
         });
         // Assign stripped/parsed body back so unknown fields don't leak into services
-        if (parsed.body !== undefined) req.body = parsed.body;
-        if (parsed.query !== undefined) req.query = parsed.query;
-        if (parsed.params !== undefined) req.params = parsed.params;
+        const parsedAny: any = parsed;
+        if (parsedAny.body !== undefined) req.body = parsedAny.body;
+        if (parsedAny.query !== undefined) req.query = parsedAny.query;
+        if (parsedAny.params !== undefined) req.params = parsedAny.params;
         return next();
     } catch (err) {
         next(err);

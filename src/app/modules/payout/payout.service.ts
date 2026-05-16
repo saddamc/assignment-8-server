@@ -9,11 +9,11 @@ const getBalance = async (user: IJWTPayload) => {
     const seller = await prisma.seller.findUnique({ where: { email: user.email } });
     if (!seller) throw new ApiError(httpStatus.NOT_FOUND, 'Seller not found');
 
-    const paid = await prisma.orderItem.aggregate({
+    const paid = await prisma.orderItem.findMany({
         where: { product: { sellerEmail: user.email }, order: { paymentStatus: 'PAID' } },
-        _sum: { price: true }
+        select: { price: true, quantity: true }
     });
-    const grossEarnings = (paid._sum.price ?? 0);
+    const grossEarnings = paid.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const commissionDeducted = grossEarnings * (seller.commissionRate / 100);
     const totalEarnings = grossEarnings - commissionDeducted;
 

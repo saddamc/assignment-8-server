@@ -66,13 +66,14 @@ model Seller {
   trustScore         Float               @default(0)
   storeRating        Float               @default(0)
   totalRatings       Int                 @default(0)
-  coupons            Coupon[]
-  flashSales         FlashSale[]
-  payouts            Payout[]
-  products           Product[]
-  sellerReviews      SellerReview[]
-  user               User                @relation(fields: [email], references: [email])
-  withdrawalRequests WithdrawalRequest[]
+  coupons              Coupon[]
+  flashSales           FlashSale[]
+  payouts              Payout[]
+  products             Product[]
+  sellerReviews        SellerReview[]
+  user                 User                @relation(fields: [email], references: [email])
+  withdrawalRequests   WithdrawalRequest[]
+  shippingRules        SellerCategoryShipping[]
 
   @@map("sellers")
 }

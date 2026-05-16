@@ -79,7 +79,7 @@ const register = async (payload: {
 // ─── Login ────────────────────────────────────────────────────────────────────
 
 const login = async (payload: { email: string; password: string }) => {
-    const user = await prisma.user.findUnique({
+    const user = await prisma.user.findFirstOrThrow({
         where: {
             email: payload.email,
             status: UserStatus.ACTIVE
@@ -130,7 +130,7 @@ const refreshToken = async (token: string) => {
         throw new ApiError(httpStatus.UNAUTHORIZED, "You are not authorized!");
     }
 
-    const userData = await prisma.user.findUniqueOrThrow({
+    const userData = await prisma.user.findFirstOrThrow({
         where: {
             email: decodedData.email,
             status: UserStatus.ACTIVE
@@ -152,7 +152,7 @@ const changePassword = async (user: { email: string }, payload: {
     oldPassword: string;
     newPassword: string;
 }) => {
-    const userData = await prisma.user.findUniqueOrThrow({
+    const userData = await prisma.user.findFirstOrThrow({
         where: {
             email: user.email,
             status: UserStatus.ACTIVE
@@ -180,7 +180,7 @@ const changePassword = async (user: { email: string }, payload: {
 // ─── Forgot Password ──────────────────────────────────────────────────────────
 
 const forgotPassword = async (payload: { email: string }) => {
-    const userData = await prisma.user.findUnique({
+    const userData = await prisma.user.findFirst({
         where: {
             email: payload.email,
             status: UserStatus.ACTIVE
@@ -243,7 +243,7 @@ const forgotPassword = async (payload: { email: string }) => {
 // ─── Reset Password ───────────────────────────────────────────────────────────
 
 const resetPassword = async (token: string, payload: { id: string; password: string }) => {
-    const userData = await prisma.user.findUnique({
+    const userData = await prisma.user.findFirst({
         where: {
             id: payload.id,
             status: UserStatus.ACTIVE
@@ -287,7 +287,7 @@ const getMe = async (session: { accessToken?: string }) => {
 
     const decodedData = jwtHelper.verifyToken(accessToken, config.jwt.jwt_secret as Secret);
 
-    const userData = await prisma.user.findUniqueOrThrow({
+    const userData = await prisma.user.findFirstOrThrow({
         where: {
             email: decodedData.email,
             status: UserStatus.ACTIVE

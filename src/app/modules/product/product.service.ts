@@ -197,14 +197,35 @@ const createProduct = async (user: IJWTPayload, req: Request) => {
     // Auto-generate SKU if not provided
     const sku = req.body.sku || `SKU-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
+    const regularPrice = Number(req.body.price);
+    if (!Number.isFinite(regularPrice) || regularPrice <= 0) {
+        throw new ApiError(httpStatus.BAD_REQUEST, "Regular price must be a positive number");
+    }
+
+    const hasDiscountPrice = req.body.discountPrice !== undefined && req.body.discountPrice !== null && req.body.discountPrice !== "";
+    const discountPrice = hasDiscountPrice ? Number(req.body.discountPrice) : undefined;
+    if (hasDiscountPrice) {
+        if (!Number.isFinite(discountPrice!) || discountPrice! <= 0) {
+            throw new ApiError(httpStatus.BAD_REQUEST, "Discount price must be a positive number");
+        }
+        if (discountPrice! >= regularPrice) {
+            throw new ApiError(httpStatus.BAD_REQUEST, "Discount price must be lower than regular price");
+        }
+    }
+
+    const fallbackDiscount = Number(req.body.discount) || 0;
+    const computedDiscount = hasDiscountPrice
+        ? Math.round(((regularPrice - discountPrice!) / regularPrice) * 100)
+        : fallbackDiscount;
+
     const productData = {
         name: req.body.name,
         slug,
         shortDescription: req.body.shortDescription || undefined,
         description: req.body.description,
-        price: Number(req.body.price),
-        discountPrice: req.body.discountPrice ? Number(req.body.discountPrice) : undefined,
-        discount: Number(req.body.discount) || 0,
+        price: regularPrice,
+        discountPrice,
+        discount: computedDiscount,
         sku,
         stock: Number(req.body.stock) || 0,
         status: (req.body.status as ProductStatus) || ProductStatus.DRAFT,
@@ -216,6 +237,7 @@ const createProduct = async (user: IJWTPayload, req: Request) => {
         seoTitle: req.body.seoTitle || undefined,
         seoDescription: req.body.seoDescription || undefined,
         seoKeywords: req.body.seoKeywords ? JSON.parse(req.body.seoKeywords) : [],
+        shippingCost: req.body.shippingCost !== undefined && req.body.shippingCost !== '' ? Number(req.body.shippingCost) : undefined,
         images
     };
 
@@ -383,6 +405,13 @@ const getAllProducts = async (params: any, options: IOptions, adminView = false)
         include: {
             category: true,
             brand: true,
+            variants: {
+                select: {
+                    id: true,
+                    size: true,
+                    stock: true
+                }
+            },
             seller: {
                 select: {
                     id: true,
@@ -525,6 +554,31 @@ const updateProduct = async (id: string, user: IJWTPayload, req: Request) => {
         }
     }
 
+    const nextPrice = req.body.price !== undefined && req.body.price !== null && req.body.price !== ""
+        ? Number(req.body.price)
+        : Number(product.price);
+    if (!Number.isFinite(nextPrice) || nextPrice <= 0) {
+        throw new ApiError(httpStatus.BAD_REQUEST, "Regular price must be a positive number");
+    }
+
+    const hasDiscountPrice = req.body.discountPrice !== undefined && req.body.discountPrice !== null && req.body.discountPrice !== "";
+    const hasRemoveDiscountPrice = req.body.discountPrice === null || req.body.discountPrice === "null";
+    let nextDiscountPrice: number | null = product.discountPrice ?? null;
+
+    if (hasRemoveDiscountPrice) {
+        nextDiscountPrice = null;
+    } else if (hasDiscountPrice) {
+        const parsedDiscountPrice = Number(req.body.discountPrice);
+        if (!Number.isFinite(parsedDiscountPrice) || parsedDiscountPrice <= 0) {
+            throw new ApiError(httpStatus.BAD_REQUEST, "Discount price must be a positive number");
+        }
+        nextDiscountPrice = parsedDiscountPrice;
+    }
+
+    if (nextDiscountPrice !== null && nextDiscountPrice >= nextPrice) {
+        throw new ApiError(httpStatus.BAD_REQUEST, "Discount price must be lower than regular price");
+    }
+
     const updateData: Prisma.ProductUpdateInput = {};
     if (hasValue(req.body.name)) updateData.name = String(req.body.name).trim();
 
@@ -543,17 +597,29 @@ const updateProduct = async (id: string, user: IJWTPayload, req: Request) => {
     if (hasValue(req.body.shortDescription)) updateData.shortDescription = toOptionalString(req.body.shortDescription);
     if (hasValue(req.body.description)) updateData.description = String(req.body.description).trim();
     if (hasValue(req.body.price)) updateData.price = Number(req.body.price);
-    if (hasValue(req.body.discountPrice)) updateData.discountPrice = Number(req.body.discountPrice);
-    if (hasValue(req.body.discount)) updateData.discount = Number(req.body.discount);
+    if (hasRemoveDiscountPrice) {
+        updateData.discountPrice = null;
+    } else if (hasDiscountPrice) {
+        updateData.discountPrice = Number(req.body.discountPrice);
+    }
+
+    if (nextDiscountPrice !== null) {
+        updateData.discount = Math.round(((nextPrice - nextDiscountPrice) / nextPrice) * 100);
+    } else if (hasValue(req.body.discount)) {
+        updateData.discount = Number(req.body.discount);
+    }
     if (hasValue(req.body.sku)) updateData.sku = toOptionalString(req.body.sku);
     if (hasValue(req.body.stock)) updateData.stock = Number(req.body.stock);
-    if (hasValue(req.body.categoryId)) updateData.categoryId = toOptionalString(req.body.categoryId);
-    if (hasValue(req.body.subCategoryId)) updateData.subCategoryId = toOptionalString(req.body.subCategoryId);
-    if (hasValue(req.body.childCategoryId)) updateData.childCategoryId = toOptionalString(req.body.childCategoryId);
-    if (hasValue(req.body.brandId)) updateData.brandId = toOptionalString(req.body.brandId);
+    if (hasValue(req.body.categoryId)) (updateData as any).categoryId = toOptionalString(req.body.categoryId);
+    if (hasValue(req.body.subCategoryId)) (updateData as any).subCategoryId = toOptionalString(req.body.subCategoryId);
+    if (hasValue(req.body.childCategoryId)) (updateData as any).childCategoryId = toOptionalString(req.body.childCategoryId);
+    if (hasValue(req.body.brandId)) (updateData as any).brandId = toOptionalString(req.body.brandId);
     if (hasValue(req.body.seoTitle)) updateData.seoTitle = toOptionalString(req.body.seoTitle);
     if (hasValue(req.body.seoDescription)) updateData.seoDescription = toOptionalString(req.body.seoDescription);
     if (seoKeywords !== undefined) updateData.seoKeywords = seoKeywords;
+    if (req.body.shippingCost !== undefined && req.body.shippingCost !== '') {
+        updateData.shippingCost = req.body.shippingCost === 'null' ? null : Number(req.body.shippingCost);
+    }
 
     if (existingImages !== undefined || uploadedImages.length > 0) {
         updateData.images = [...(existingImages || []), ...uploadedImages];

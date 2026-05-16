@@ -181,15 +181,15 @@ const getRevenueOverview = async (period: 'day' | 'week' | 'month' = 'month') =>
     };
 
     const [revenue, orders, commissions] = await prisma.$transaction([
-        prisma.orderItem.aggregate({
-            where: { order: { paymentStatus: 'PAID', createdAt: { gte: startDates[period] } } },
-            _sum: { price: true }
+        prisma.order.aggregate({
+            where: { paymentStatus: 'PAID', createdAt: { gte: startDates[period] } },
+            _sum: { totalAmount: true }
         }),
         prisma.order.count({ where: { paymentStatus: 'PAID', createdAt: { gte: startDates[period] } } }),
         prisma.seller.aggregate({ _avg: { commissionRate: true } })
     ]);
 
-    const grossRevenue = revenue._sum.price ?? 0;
+    const grossRevenue = revenue._sum.totalAmount ?? 0;
     const avgCommission = commissions._avg.commissionRate ?? 10;
     const platformEarnings = grossRevenue * (avgCommission / 100);
 

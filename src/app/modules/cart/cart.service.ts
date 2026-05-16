@@ -20,7 +20,8 @@ const getMyCart = async (user: IJWTPayload) => {
                                 }
                             }
                         }
-                    }
+                    },
+                    variant: true
                 },
                 orderBy: { createdAt: "desc" }
             }
@@ -43,7 +44,8 @@ const getMyCart = async (user: IJWTPayload) => {
                                     }
                                 }
                             }
-                        }
+                        },
+                        variant: true
                     }
                 }
             }
@@ -53,7 +55,7 @@ const getMyCart = async (user: IJWTPayload) => {
     return cart;
 };
 
-const addToCart = async (user: IJWTPayload, payload: { productId: string; quantity?: number }) => {
+const addToCart = async (user: IJWTPayload, payload: { productId: string; quantity?: number; size?: string; variantId?: string }) => {
     const quantity = payload.quantity || 1;
 
     // Verify product exists and has stock
@@ -61,7 +63,37 @@ const addToCart = async (user: IJWTPayload, payload: { productId: string; quanti
         where: { id: payload.productId, isDeleted: false }
     });
 
-    if (product.stock < quantity) {
+    const normalizedSize = (payload.size || "").trim();
+
+    const productVariants = await prisma.productVariant.findMany({
+        where: { productId: payload.productId },
+        select: { id: true, size: true, stock: true }
+    });
+
+    const requiresSizeSelection = productVariants.some((v) => !!(v.size || "").trim());
+
+    let selectedVariantId: string | null = null;
+    let selectedVariantStock: number | null = null;
+
+    if (requiresSizeSelection) {
+        if (!normalizedSize && !payload.variantId) {
+            throw new ApiError(httpStatus.BAD_REQUEST, "Please select size for this product");
+        }
+
+        const selectedVariant = payload.variantId
+            ? productVariants.find((v) => v.id === payload.variantId)
+            : productVariants.find((v) => ((v.size || "").trim() === normalizedSize));
+
+        if (!selectedVariant) {
+            throw new ApiError(httpStatus.BAD_REQUEST, "Selected size is invalid");
+        }
+
+        selectedVariantId = selectedVariant.id;
+        selectedVariantStock = selectedVariant.stock;
+    }
+
+    const availableStock = selectedVariantStock ?? product.stock;
+    if (availableStock < quantity) {
         throw new ApiError(httpStatus.BAD_REQUEST, "Insufficient stock!");
     }
 
@@ -77,12 +109,11 @@ const addToCart = async (user: IJWTPayload, payload: { productId: string; quanti
     }
 
     // Check if item already in cart
-    const existingItem = await prisma.cartItem.findUnique({
+    const existingItem = await prisma.cartItem.findFirst({
         where: {
-            cartId_productId: {
-                cartId: cart.id,
-                productId: payload.productId
-            }
+            cartId: cart.id,
+            productId: payload.productId,
+            size: normalizedSize
         }
     });
 
@@ -94,13 +125,17 @@ const addToCart = async (user: IJWTPayload, payload: { productId: string; quanti
         throw new ApiError(httpStatus.BAD_REQUEST, `You can only add up to 5 of this item to your cart. You currently have ${currentQuantity} in your cart.`);
     }
 
+    if (availableStock < newTotalQuantity) {
+        throw new ApiError(httpStatus.BAD_REQUEST, "Insufficient stock!");
+    }
+
     let result;
     if (existingItem) {
         // Update quantity
         result = await prisma.cartItem.update({
             where: { id: existingItem.id },
             data: { quantity: existingItem.quantity + quantity },
-            include: { product: true }
+            include: { product: true, variant: true }
         });
     } else {
         // Add new item
@@ -108,9 +143,11 @@ const addToCart = async (user: IJWTPayload, payload: { productId: string; quanti
             data: {
                 cartId: cart.id,
                 productId: payload.productId,
+                variantId: selectedVariantId,
+                size: normalizedSize,
                 quantity
             },
-            include: { product: true }
+            include: { product: true, variant: true }
         });
     }
 
@@ -136,18 +173,22 @@ const updateCartItem = async (user: IJWTPayload, cartItemId: string, payload: { 
     }
 
     // Check stock
-    const product = await prisma.product.findUniqueOrThrow({
-        where: { id: cartItem.productId }
-    });
+    const [product, variant] = await Promise.all([
+        prisma.product.findUniqueOrThrow({ where: { id: cartItem.productId } }),
+        cartItem.variantId
+            ? prisma.productVariant.findUnique({ where: { id: cartItem.variantId } })
+            : Promise.resolve(null)
+    ]);
 
-    if (product.stock < payload.quantity) {
+    const availableStock = variant?.stock ?? product.stock;
+    if (availableStock < payload.quantity) {
         throw new ApiError(httpStatus.BAD_REQUEST, "Insufficient stock!");
     }
 
     const result = await prisma.cartItem.update({
         where: { id: cartItemId },
         data: { quantity: payload.quantity },
-        include: { product: true }
+        include: { product: true, variant: true }
     });
 
     return result;

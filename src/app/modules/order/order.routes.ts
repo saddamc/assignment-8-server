@@ -15,6 +15,12 @@ router.post(
     OrderController.createOrder
 );
 
+router.get(
+    '/shipping-quote',
+    auth(UserRole.CUSTOMER),
+    OrderController.getShippingQuote
+);
+
 // Customer gets their own orders
 router.get(
     '/my-orders',
