@@ -5,6 +5,7 @@ import httpStatus from "http-status";
 import { IJWTPayload } from "../../types/common";
 import { PaymentStatus, OrderStatus } from "@prisma/client";
 import Stripe from "stripe";
+import { IOptions, paginationHelper } from "../../helper/paginationHelper";
 
 /**
  * Industry-Standard Payment Processor
@@ -189,9 +190,58 @@ const getPaymentsByOrder = async (orderId: string, user: IJWTPayload) => {
     };
 };
 
+const getAllPayments = async (options: IOptions) => {
+    const { page, limit, skip, sortBy, sortOrder } = paginationHelper.calculatePagination(options);
+
+    const result = await prisma.order.findMany({
+        skip,
+        take: limit,
+        orderBy: {
+            [sortBy]: sortOrder
+        },
+        include: {
+            customer: {
+                select: {
+                    name: true,
+                    email: true
+                }
+            }
+        }
+    });
+
+    const total = await prisma.order.count();
+
+    const payments = result.map((order) => ({
+        id: order.id,
+        transactionId: order.transactionId || order.id,
+        orderId: order.id,
+        amount: order.totalAmount,
+        method: order.paymentMethod,
+        status: order.paymentStatus,
+        createdAt: order.createdAt,
+        order: {
+            id: order.id,
+            customer: {
+                name: order.customer?.name || "Customer",
+                email: order.customer?.email || order.customerEmail
+            }
+        }
+    }));
+
+    return {
+        meta: {
+            page,
+            limit,
+            total
+        },
+        data: payments
+    };
+};
+
 export const PaymentService = {
     createCheckoutSession,
     handleStripeWebhookEvent,
     getPaymentsByOrder,
     verifyStripeSession,
+    getAllPayments,
 };

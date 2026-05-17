@@ -54,7 +54,7 @@ const reviewProduct = async (
 
     // Check existing approval record — allow missing record (product may pre-date approval system)
     const existing = await prisma.productApproval.findUnique({ where: { productId } });
-    if (existing && existing.status !== 'PENDING') {
+    if (existing && existing.status !== 'PENDING' && product.status !== 'DISABLED' && product.status !== 'REJECTED') {
         throw new ApiError(httpStatus.BAD_REQUEST, `Product is already ${existing.status.toLowerCase()}`);
     }
 

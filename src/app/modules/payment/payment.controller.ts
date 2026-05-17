@@ -6,6 +6,7 @@ import httpStatus from "http-status";
 import { stripe } from "../../helper/stripe";
 import config from "../../../config";
 import { getParamAsString } from "../../helper/getParam";
+import pick from "../../helper/pick";
 
 const handleStripeWebhookEvent = catchAsync(async (req: Request, res: Response) => {
     const sig = req.headers["stripe-signature"] as string;
@@ -78,9 +79,23 @@ const verifyStripeSession = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
+const getAllPayments = catchAsync(async (req: Request, res: Response) => {
+    const options = pick(req.query, ["page", "limit", "sortBy", "sortOrder"]);
+    const result = await PaymentService.getAllPayments(options);
+
+    sendResponse(res, {
+        statusCode: httpStatus.OK,
+        success: true,
+        message: "Payments retrieved successfully!",
+        meta: result.meta,
+        data: result.data
+    });
+});
+
 export const PaymentController = {
     createCheckoutSession,
     handleStripeWebhookEvent,
     getPaymentsByOrder,
     verifyStripeSession,
+    getAllPayments,
 }

@@ -141,8 +141,27 @@ const getAllFromDB = async (params: any, options: IOptions) => {
             email: true,
             role: true,
             status: true,
+            name: true,
             createdAt: true,
-            updatedAt: true
+            updatedAt: true,
+            admin: {
+                select: {
+                    name: true,
+                    email: true
+                }
+            },
+            customer: {
+                select: {
+                    name: true,
+                    email: true
+                }
+            },
+            seller: {
+                select: {
+                    name: true,
+                    email: true
+                }
+            }
         }
     });
 

@@ -18,6 +18,13 @@ router.post(
     PaymentController.verifyStripeSession
 );
 
+// Get all payments (Admin only)
+router.get(
+    '/',
+    auth(UserRole.ADMIN),
+    PaymentController.getAllPayments
+);
+
 // Get payment details for an order
 router.get(
     '/:orderId',
