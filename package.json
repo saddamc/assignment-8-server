@@ -4,9 +4,6 @@
   "main": "server.js",
   "author": "",
   "license": "MIT",
-  "prisma": {
-    "schema": "./prisma/schema"
-  },
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only ./src/server.ts",
     "seed": "ts-node --transpile-only ./prisma/seed.ts"
@@ -14,6 +11,7 @@
   "dependencies": {
     "@prisma/client": "^6.19.3",
     "@types/nodemailer": "^8.0.0",
+    "axios": "^1.16.1",
     "bcryptjs": "^3.0.2",
     "cloudinary": "^2.7.0",
     "cookie-parser": "^1.4.7",

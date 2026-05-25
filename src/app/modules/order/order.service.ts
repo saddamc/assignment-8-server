@@ -10,7 +10,7 @@ interface ICreateOrderPayload {
     addressId?: string;
     contactNumber?: string;
     couponCode?: string;
-    paymentMethod?: "STRIPE" | "COD";
+    paymentMethod?: "STRIPE" | "COD" | "BKASH" | "NAGAD";
     notes?: string;
 }
 

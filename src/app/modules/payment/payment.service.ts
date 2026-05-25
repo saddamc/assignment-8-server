@@ -238,10 +238,33 @@ const getAllPayments = async (options: IOptions) => {
     };
 };
 
+const verifyBkashSimulation = async (user: IJWTPayload, payload: { orderId: string; paymentMethod: string; transactionId?: string }) => {
+    const order = await prisma.order.findUniqueOrThrow({
+        where: { id: payload.orderId }
+    });
+
+    if (order.customerEmail !== user.email) throw new ApiError(httpStatus.FORBIDDEN, "Forbidden");
+    if (order.paymentStatus === PaymentStatus.PAID) throw new ApiError(httpStatus.BAD_REQUEST, "Already paid");
+
+    const txnId = payload.transactionId || `TXN-${Math.random().toString(36).substring(2, 11).toUpperCase()}`;
+
+    // Process successful payment inside database
+    const updatedOrder = await processSuccessfulPayment(order.id, txnId);
+
+    // Also update order paymentMethod to the selected one (e.g. BKASH or NAGAD)
+    await prisma.order.update({
+        where: { id: order.id },
+        data: { paymentMethod: payload.paymentMethod.toUpperCase() }
+    });
+
+    return updatedOrder;
+};
+
 export const PaymentService = {
     createCheckoutSession,
     handleStripeWebhookEvent,
     getPaymentsByOrder,
     verifyStripeSession,
     getAllPayments,
+    verifyBkashSimulation,
 };

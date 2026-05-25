@@ -34,6 +34,7 @@ const createSellerValidationSchema = z.object({
         contactNumber: z.string({
             error: "Contact Number is required!"
         }),
+        isPhoneVerified: z.boolean().optional(),
         address: z.string().optional()
     })
 });

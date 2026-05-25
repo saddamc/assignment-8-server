@@ -32,4 +32,11 @@ router.get(
     PaymentController.getPaymentsByOrder
 );
 
+// Verify bKash/Nagad checkout simulation (called from checkout page)
+router.post(
+    '/bkash-verify',
+    auth(UserRole.CUSTOMER),
+    PaymentController.verifyBkashSimulation
+);
+
 export const paymentRoutes = router;

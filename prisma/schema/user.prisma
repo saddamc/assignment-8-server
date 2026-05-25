@@ -54,6 +54,7 @@ model Seller {
   storeDescription   String?
   profilePhoto       String?
   contactNumber      String
+  isPhoneVerified    Boolean             @default(false)
   address            String?
   isDeleted          Boolean             @default(false)
   createdAt          DateTime            @default(now())
@@ -84,6 +85,7 @@ model Customer {
   email          String           @unique
   profilePhoto   String?
   contactNumber  String?
+  isPhoneVerified Boolean          @default(false)
   address        String?
   isDeleted      Boolean          @default(false)
   createdAt      DateTime         @default(now())
@@ -216,4 +218,28 @@ model AdminActivityLog {
   @@index([adminEmail])
   @@index([createdAt])
   @@map("admin_activity_logs")
+}
+
+model PhoneVerification {
+  id        String   @id @default(uuid())
+  phone     String   @unique
+  otp       String
+  expiresAt DateTime
+  verifiedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("phone_verifications")
+}
+
+model EmailVerification {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  otp       String
+  expiresAt DateTime
+  verifiedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("email_verifications")
 }

@@ -92,10 +92,23 @@ const getAllPayments = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
+const verifyBkashSimulation = catchAsync(async (req: Request, res: Response) => {
+    const user = req.user!;
+    const result = await PaymentService.verifyBkashSimulation(user, req.body);
+
+    sendResponse(res, {
+        statusCode: httpStatus.OK,
+        success: true,
+        message: "bKash/Nagad payment simulation succeeded and verified!",
+        data: result
+    });
+});
+
 export const PaymentController = {
     createCheckoutSession,
     handleStripeWebhookEvent,
     getPaymentsByOrder,
     verifyStripeSession,
     getAllPayments,
-}
+    verifyBkashSimulation,
+};

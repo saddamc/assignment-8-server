@@ -7,6 +7,8 @@ import { Prisma, UserRole, UserStatus } from "@prisma/client";
 import { userSearchableFields } from "./user.constant";
 import { IJWTPayload } from "../../types/common";
 import config from "../../../config";
+import ApiError from "../../errors/ApiError";
+import httpStatus from "http-status";
 
 const createCustomer = async (req: Request) => {
 
@@ -44,9 +46,21 @@ const createSeller = async (req: Request) => {
     }
 
     const hashedPassword: string = await bcrypt.hash(req.body.password, Number(config.salt_round))
+    const email = req.body.seller.email.trim().toLowerCase();
+    const contactNumber = req.body.seller.contactNumber.replace(/\D/g, "");
+
+    const verifiedEmail = await prisma.emailVerification.findUnique({ where: { email } });
+    if (!verifiedEmail?.verifiedAt) {
+        throw new ApiError(httpStatus.BAD_REQUEST, "Please verify your email before opening a seller account.");
+    }
+
+    req.body.seller.email = email;
+    req.body.seller.contactNumber = contactNumber;
+    req.body.seller.isPhoneVerified = false;
 
     const userData = {
-        email: req.body.seller.email,
+        email,
+        name: req.body.seller.name,
         password: hashedPassword,
         role: UserRole.SELLER
     }
@@ -59,6 +73,8 @@ const createSeller = async (req: Request) => {
         const createdSellerData = await transactionClient.seller.create({
             data: req.body.seller
         });
+
+        await transactionClient.emailVerification.delete({ where: { email } }).catch(() => {});
 
         return createdSellerData;
     });

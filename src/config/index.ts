@@ -6,6 +6,8 @@ dotenv.config({ path: path.join(process.cwd(), '.env') });
 export default {
     node_env: process.env.NODE_ENV,
     port: process.env.PORT || 5000,
+    client_url: process.env.CLIENT_URL,
+    frontend_url: process.env.FRONTEND_URL,
     database_url: process.env.DATABASE_URL,
     cloudinary: {
         cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -29,5 +31,9 @@ export default {
     emailSender: {
         email: process.env.EMAIL,
         app_pass: process.env.APP_PASS
+    },
+    google: {
+        client_id: process.env.GOOGLE_CLIENT_ID,
+        client_secret: process.env.GOOGLE_CLIENT_SECRET
     }
 }
